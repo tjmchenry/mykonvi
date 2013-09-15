@@ -137,7 +137,7 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
     connect(topicLine, SIGNAL(clearStatusBarTempText()), this, SIGNAL(clearStatusBarTempText()));
 
     m_topicHistory = new TopicHistoryModel(this);
-    connect(m_topicHistory, SIGNAL(currentTopicChanged(QString)), topicLine, SLOT(setText(QString)));
+    connect(m_topicHistory, SIGNAL(currentTopicChanged()), this, SLOT(setCurrentTopic()));
 
     topicLayout->addWidget(m_topicButton, 0, 0);
     topicLayout->addWidget(topicLine, 0, 1, -1, 1);
@@ -290,9 +290,12 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
 
     updateAppearance();
 
-    #ifdef HAVE_QCA2
+#ifdef HAVE_QCA2
     m_cipher = 0;
-    #endif
+    m_cipherFilterModel =  new CipherFilterProxyModel(this);
+    m_cipherFilterModel->setDynamicSortFilter(true);
+    m_cipherFilterModel->setSourceModel(m_topicHistory);
+#endif
     //FIXME JOHNFLUX
     // connect( Konversation::Addressbook::self()->getAddressBook(), SIGNAL(addressBookChanged(AddressBook*)), this, SLOT(slotLoadAddressees()) );
     // connect( Konversation::Addressbook::self(), SIGNAL(addresseesChanged()), this, SLOT(slotLoadAddressees()));
@@ -348,6 +351,29 @@ void Channel::connectionStateChanged(Server* server, Konversation::ConnectionSta
     }
 }
 
+QString Channel::getCurrentTopic()
+{
+    if(m_topicHistory->rowCount() > 0)
+    {
+#ifdef HAVE_QCA2
+        if (m_cipherFilterModel)
+            return m_cipherFilterModel->data(m_cipherFilterModel->index(m_topicHistory->rowCount() - 1, 0), Qt::DisplayRole).toString();
+
+        else
+#endif
+            return m_topicHistory->data(m_topicHistory->index(m_topicHistory->rowCount() - 1, 0), Qt::DisplayRole).toString();
+    }
+    else
+    {
+        return QString();
+    }
+}
+
+void Channel::setCurrentTopic()
+{
+    topicLine->setText(getCurrentTopic());
+}
+
 void Channel::setEncryptedOutput(bool e)
 {
 #ifdef HAVE_QCA2
@@ -358,15 +384,16 @@ void Channel::setEncryptedOutput(bool e)
         if  (!getCipher()->setKey(m_server->getKeyForRecipient(getName())))
             return;
 
-        m_topicHistory->setCipher(getCipher());
-
-        topicLine->setText(m_topicHistory->currentTopic());
+        m_cipherFilterModel->setCipher(getCipher());
+        m_cipherFilterModel->invalidate();
+        setCurrentTopic();
     }
     else
     {
         cipherLabel->hide();
-        m_topicHistory->clearCipher();
-        topicLine->setText(m_topicHistory->currentTopic());
+        m_cipherFilterModel->clearCipher();
+        m_cipherFilterModel->invalidate();
+        setCurrentTopic();
 
     }
 #else
@@ -1340,7 +1367,7 @@ void Channel::emitUpdateInfo()
 
 QString Channel::getTopic()
 {
-    return m_topicHistory->currentTopic();
+    return getCurrentTopic();
 }
 
 void Channel::setTopic(const QString& text)
@@ -1364,6 +1391,16 @@ void Channel::setTopic(const QString& nickname, const QString& text)
     if (!cleanTopic.isEmpty() && hasIRCMarkups(cleanTopic))
         cleanTopic += "\017";
 
+#ifdef HAVE_QCA2
+    if (getCipher()->setKey(m_server->getKeyForRecipient(getName())))
+    {
+        QByteArray decryptedTopic = m_cipher->decryptTopic(cleanTopic.toUtf8());
+        if (decryptedTopic == QByteArray())
+            cleanTopic = "(u) " + cleanTopic;
+        else
+            cleanTopic = "(e) " + QString::fromUtf8(decryptedTopic.data());
+    }
+#endif
     if (nickname == m_server->getNickname())
         appendCommandMessage(i18n("Topic"), i18n("You set the channel topic to \"%1\".", cleanTopic));
     else

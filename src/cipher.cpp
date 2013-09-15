@@ -246,7 +246,7 @@ namespace Konversation
         else if(cipherText.left(5) == "«m«")
             cipherText = cipherText.mid(5,cipherText.length()-10);
         else
-            return "ERROR: "+cipherText;
+            return QByteArray();
 
         QByteArray temp;
         //TODO currently no backwards sanity checks for topic, it seems to use different standards
@@ -258,7 +258,7 @@ namespace Konversation
 
         if(temp == cipherText)
         {
-            return "ERROR: "+cipherText;
+            return QByteArray();
         }
         else
             cipherText = temp;
@@ -266,7 +266,6 @@ namespace Konversation
         if(cipherText.mid(0,2) == "@@")
             cipherText = cipherText.mid(2);
 
-        cipherText = "(e) "+cipherText;
         return cipherText;
     }
 

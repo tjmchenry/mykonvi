@@ -24,6 +24,7 @@
 #define TOPICHISTORYMODEL_H
 
 #include <QAbstractListModel>
+#include <QSortFilterProxyModel>
 #include <QDateTime>
 #include "channel.h"
 
@@ -33,6 +34,24 @@ namespace Konversation
 {
     class Cipher;
 }
+
+class CipherFilterProxyModel : public QSortFilterProxyModel
+{
+    Q_OBJECT
+
+    public:
+        explicit CipherFilterProxyModel(QObject* parent = 0);
+        ~CipherFilterProxyModel();
+
+        QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
+
+        void setCipher(Konversation::Cipher* cipher) { m_cipher = cipher; }
+        void clearCipher() { m_cipher = 0; }
+        bool hasCipher() { return (m_cipher ? true : false); }
+
+    private:
+        Konversation::Cipher* m_cipher;
+};
 #endif
 
 
@@ -63,11 +82,6 @@ class TopicHistoryModel : public QAbstractListModel
         void appendTopic(const QString& text, const QString& author = QString(), QDateTime timestamp = QDateTime::currentDateTime());
         void setCurrentTopicMetadata(const QString& author, QDateTime timestamp = QDateTime::currentDateTime());
 
-#ifdef HAVE_QCA2
-        void setCipher(Konversation::Cipher* cipher);
-        void clearCipher();
-#endif
-
         QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
         QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const;
 
@@ -78,14 +92,12 @@ class TopicHistoryModel : public QAbstractListModel
 
 
     signals:
-        void currentTopicChanged(const QString& text);
+        void currentTopicChanged();
 
 
     private:
         QList<Topic> m_topicList;
-#ifdef HAVE_QCA2
-        Konversation::Cipher* m_cipher;
-#endif
+
 };
 
 #endif

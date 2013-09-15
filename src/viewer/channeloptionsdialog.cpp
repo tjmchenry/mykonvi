@@ -53,7 +53,11 @@ namespace Konversation
 
         installEventFilter(m_ui.topicHistoryView);
         m_ui.topicHistoryView->setServer(m_channel->getServer());
+#ifdef HAVE_QCA2
+        m_ui.topicHistoryView->setModel(m_channel->getCipherFilter());
+#else
         m_ui.topicHistoryView->setModel(m_channel->getTopicHistory());
+#endif
         m_ui.topicHistorySearchLine->setProxy(static_cast<QSortFilterProxyModel*>(m_ui.topicHistoryView->model()));
         m_ui.topicHistorySearchLine->lineEdit()->setClickMessage("");
 
@@ -218,7 +222,15 @@ namespace Konversation
         if (!m_editingTopic)
         {
             if (!selection.isEmpty())
-                m_ui.topicEdit->setPlainText(m_ui.topicHistoryView->model()->data(selection.indexes().first()).toString());
+            {
+#ifdef HAVE_QCA2
+                // Cut out the first 4 characters because these are the (e)/(u) encryption prefixes.
+                if (m_channel->getCipherFilter()->hasCipher())
+                    m_ui.topicEdit->setPlainText(m_ui.topicHistoryView->model()->data(selection.indexes().first()).toString().mid(4));
+                else
+#endif
+                    m_ui.topicEdit->setPlainText(m_ui.topicHistoryView->model()->data(selection.indexes().first()).toString());
+            }
             else
                 m_ui.topicEdit->clear();
         }

@@ -29,12 +29,42 @@
 #include <KLocale>
 #include <KCategorizedSortFilterProxyModel>
 
+#ifdef HAVE_QCA2
+CipherFilterProxyModel::CipherFilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent)
+{
+    m_cipher = 0;
+}
+
+CipherFilterProxyModel::~CipherFilterProxyModel()
+{
+}
+
+QVariant CipherFilterProxyModel::data(const QModelIndex& index, int role) const
+{
+    if (!index.isValid() || index.row() >= sourceModel()->rowCount())
+        return QVariant();
+
+    if (role == Qt::DisplayRole && index.column() == 0 && m_cipher)
+    {
+        const QModelIndex& sourceIndex = mapToSource(index);
+        QString rawTopic = sourceModel()->data(sourceIndex, role).toString();
+        QByteArray cipherText = m_cipher->decryptTopic(rawTopic.toUtf8());
+
+        if (cipherText == QByteArray())
+            return QString("(u) " + rawTopic);
+
+        return QString("(e) " + QString::fromUtf8(cipherText.data()));
+    }
+    else
+    {
+        const QModelIndex& sourceIndex = mapToSource(index);
+        return sourceModel()->data(sourceIndex, role);
+    }
+}
+#endif
 
 TopicHistoryModel::TopicHistoryModel(QObject* parent) : QAbstractListModel(parent)
 {
-#ifdef HAVE_QCA2
-    m_cipher = 0;
-#endif
 }
 
 TopicHistoryModel::~TopicHistoryModel()
@@ -81,7 +111,7 @@ void TopicHistoryModel::appendTopic(const QString& text, const QString& author, 
 
     endInsertRows();
 
-    currentTopicChanged(text);
+    currentTopicChanged();
 }
 
 void TopicHistoryModel::setCurrentTopicMetadata(const QString& author, QDateTime timestamp)
@@ -108,30 +138,6 @@ void TopicHistoryModel::setCurrentTopicMetadata(const QString& author, QDateTime
     }
 }
 
-#ifdef HAVE_QCA2
-void TopicHistoryModel::setCipher(Konversation::Cipher* cipher)
-{
-    emit layoutAboutToBeChanged();
-    beginResetModel();
-
-    m_cipher = cipher;
-
-    endResetModel();
-    emit layoutChanged();
-}
-
-void TopicHistoryModel::clearCipher()
-{
-    emit layoutAboutToBeChanged();
-    beginResetModel();
-
-    m_cipher = 0;
-
-    endResetModel();
-    emit layoutChanged();
-}
-#endif
-
 QVariant TopicHistoryModel::data(const QModelIndex& index, int role) const
 {
     if (!index.isValid() || index.row() >= m_topicList.count())
@@ -144,19 +150,7 @@ QVariant TopicHistoryModel::data(const QModelIndex& index, int role) const
         switch (index.column())
         {
             case 0:
-#ifdef HAVE_QCA2
-                if (m_cipher)
-                {
-                     QByteArray cipherText = m_cipher->decryptTopic(topic.text.toUtf8());
-
-                     // HACK: The horrible undocumented magic values here are straight out of
-                     // Channel, where this code once lived.
-                     return QString::fromUtf8(cipherText.data() + 2, cipherText.length() - 2);
-                }
-                else
-#endif
-                    return topic.text;
-
+                return topic.text;
                 break;
             case 1:
                 if (!topic.author.isEmpty())

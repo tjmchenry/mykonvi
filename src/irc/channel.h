@@ -48,6 +48,7 @@ class ModeButton;
 class IRCInput;
 class NickChangeDialog;
 class TopicHistoryModel;
+class CipherFilterProxyModel;
 
 namespace Konversation
 {
@@ -117,6 +118,8 @@ class Channel : public ChatWindow
         void repositionNick(Nick *nick);
         bool shouldShowEvent(ChannelNickPtr channelNick);
 
+        QString getCurrentTopic();
+
     public slots:
         void setNickname(const QString& newNickname);
         void scheduleAutoWho(int msec = -1);
@@ -124,6 +127,7 @@ class Channel : public ChatWindow
         void rejoin();
 
     protected slots:
+        void setCurrentTopic();
         void autoUserhost();
         void autoWho();
         void updateAutoWho();
@@ -165,6 +169,9 @@ class Channel : public ChatWindow
     public:
         QString getTopic();
         TopicHistoryModel* getTopicHistory() { return m_topicHistory; };
+#ifdef HAVE_QCA2
+        CipherFilterProxyModel* getCipherFilter() { return m_cipherFilterModel; }
+#endif
 
         void setTopic(const QString& text);
         void setTopic(const QString& nickname, const QString& text);
@@ -356,8 +363,9 @@ class Channel : public ChatWindow
         int ops; ///< How many ops on the channel
 
         Konversation::ChannelOptionsDialog *m_optionsDialog;
-        #ifdef HAVE_QCA2
+#ifdef HAVE_QCA2
         Konversation::Cipher *m_cipher;
-        #endif
+        CipherFilterProxyModel* m_cipherFilterModel;
+#endif
 };
 #endif

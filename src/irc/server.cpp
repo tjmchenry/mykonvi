@@ -1327,7 +1327,7 @@ void Server::incoming()
         if (m_rawLog)
             m_rawLog->appendRaw(RawLog::Inbound, first);
 
-        #ifdef HAVE_QCA2
+#ifdef HAVE_QCA2
         QByteArray cKey = getKeyForRecipient(channelKey);
         if(!cKey.isEmpty())
         {
@@ -1346,21 +1346,8 @@ void Server::incoming()
 
                 first.prepend(backup);
             }
-            else if(command == "332" || command == "topic")
-            {
-                //only send encrypted text to decrypter
-                int index = first.indexOf(":",first.indexOf(":")+1);
-                QByteArray backup = first.mid(0,index+1);
-
-                if(getChannelByName(channelKey) && getChannelByName(channelKey)->getCipher()->setKey(cKey))
-                    first = getChannelByName(channelKey)->getCipher()->decryptTopic(first.mid(index+1));
-                else if(getQueryByName(channelKey) && getQueryByName(channelKey)->getCipher()->setKey(cKey))
-                    first = getQueryByName(channelKey)->getCipher()->decryptTopic(first.mid(index+1));
-
-                first.prepend(backup);
-            }
         }
-        #endif
+#endif
         bool isUtf8 = Konversation::isUtf8(first);
 
         QString encoded;

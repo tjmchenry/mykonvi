@@ -49,6 +49,8 @@ set (irc_SRCS
 
     irc/irccharsets.cpp
 
+    irc/nick2.cpp
+    irc/nicklistmodel.cpp
     irc/nick.cpp
     irc/nickinfo.cpp
     irc/nicklistview.cpp

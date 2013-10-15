@@ -12,13 +12,16 @@
 #ifndef NICKLISTMODEL_H
 #define NICKLISTMODEL_H
 
-#include "server.h"
 #include "channel.h"
+#include "server.h"
 #include "images.h"
 #include "nick2.h"
 #include "ircinput.h"
 
 #include <QSortFilterProxyModel>
+
+class Nick2;
+class Channel;
 
 enum Roles {NickRole = Qt::UserRole, HostmaskRole};
 
@@ -68,7 +71,6 @@ class NickListModel : public QAbstractListModel
     private:
         QHash<QString, Nick2*> m_nickHash;
         Server* m_server;
-        Images* m_images;
         bool m_hostmask;
         QString m_whatsThis;
         QPixmap m_icon;
@@ -77,13 +79,13 @@ class NickListModel : public QAbstractListModel
         int m_minimumRowHeight;
 };
 
-class ChannelNickListProxyModel : public QSortFilterProxyModel
+class ChannelNickListFilterModel : public QSortFilterProxyModel
 {
     Q_OBJECT
 
     public:
-        explicit ChannelNickListProxyModel(Channel* channel);
-        ~ChannelNickListProxyModel();
+        explicit ChannelNickListFilterModel(Channel* channel);
+        ~ChannelNickListFilterModel();
 
         QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
 
@@ -114,7 +116,5 @@ class ChannelNickListProxyModel : public QSortFilterProxyModel
         QString m_channelName;
         int m_completionPosition;
 };
-
-//typedef bool (ChannelNickListProxyModel::*lessThanPtr) (const Nick2*, const Nick2*) const;
 
 #endif

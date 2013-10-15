@@ -21,6 +21,7 @@
 #include "inputfilter.h"
 #include "outputfilter.h"
 #include "nickinfo.h"
+#include "nicklistmodel.h"
 #include "serversettings.h"
 #include "servergroupsettings.h"
 #include "connectionsettings.h"
@@ -54,6 +55,8 @@ class ChatWindow;
 class ViewContainer;
 
 class IRCQueue;
+
+class NickListModel;
 
 namespace Konversation
 {
@@ -135,6 +138,7 @@ class Server : public QObject
         QStringList generateJoinCommand(const Konversation::ChannelList &tmpList);
 
         QAbstractItemModel* nickListModel() const;
+        NickListModel* nickListModel2() const;
         void resetNickSelection();
         void queueNicks(const QString& channelName, const QStringList& nicknameList);
         void addHostmaskToNick(const QString &sourceNick, const QString &sourceHostmask);
@@ -715,6 +719,7 @@ class Server : public QObject
         QList<int> m_nickIndices;
         QStringList m_referenceNicklist;
         QStringListModel* m_nickListModel;
+        NickListModel* m_nickListModel2;
 
         // TODO roll these into a QMap.
         QString m_serverNickPrefixes;               // Prefixes used by the server to indicate a mode

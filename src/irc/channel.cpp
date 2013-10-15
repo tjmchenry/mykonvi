@@ -205,6 +205,11 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
     nicknameListView=new NickListView(nickListButtons, this);
     nicknameListView->installEventFilter(this);
 
+    m_channelNickListModel = new ChannelNickListFilterModel(this);
+
+    m_nicknameListView2 = new QListView(nickListButtons);
+    m_nicknameListView2->setModel(m_channelNickListModel);
+
     // initialize buttons grid, will be set up in updateQuickButtons
     m_buttonsGrid = 0;
 
@@ -325,6 +330,7 @@ void Channel::setServer(Server* server)
     topicLine->setServer(server);
     refreshModeButtons();
     nicknameCombobox->setModel(m_server->nickListModel());
+    m_channelNickListModel->setSourceModel(m_server->nickListModel2());
 
     connect(awayLabel, SIGNAL(unaway()), m_server, SLOT(requestUnaway()));
     connect(awayLabel, SIGNAL(awayMessageChanged(QString)), m_server, SLOT(requestAway(QString)));

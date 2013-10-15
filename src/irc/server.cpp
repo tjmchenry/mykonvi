@@ -90,6 +90,7 @@ Server::Server(QObject* parent, ConnectionSettings& settings) : QObject(parent)
     m_nickIndices.append(0);
 
     m_nickListModel = new QStringListModel(this);
+    m_nickListModel2 = new NickListModel(this);
 
     m_currentLag = -1;
     m_rawLog = 0;
@@ -4198,6 +4199,11 @@ void Server::parseFinishKeyX(const QString &sender, const QString &remoteKey)
 QAbstractItemModel* Server::nickListModel() const
 {
     return m_nickListModel;
+}
+
+NickListModel* Server::nickListModel2() const
+{
+    return m_nickListModel2;
 }
 
 void Server::updateNickInfoAddressees()

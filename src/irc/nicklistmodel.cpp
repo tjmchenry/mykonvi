@@ -9,11 +9,11 @@
   Copyright (C) 2013 Travis McHenry <me@travisjmchenry.com>
 */
 
-#include <QTextCursor>
-
 #include "nicklistmodel.h"
 #include "application.h"
 #include "preferences.h"
+
+#include <QTextCursor>
 
 NickListModel::NickListModel(Server* server) : QAbstractListModel(server)
 {
@@ -24,7 +24,7 @@ NickListModel::NickListModel(Server* server) : QAbstractListModel(server)
 
     updateMinimumRowHeight();
 
-    if(m_images->getNickIcon(Images::Normal, false).isNull())
+    if(images->getNickIcon(Images::Normal, false).isNull())
     {
         m_whatsThis = i18n("<qt><p>This shows all the people in the channel.  The nick for each person is shown.<br />Usually an icon is shown showing the status of each person, but you do not seem to have any icon theme installed.  See the Konversation settings - <i>Configure Konversation</i> under the <i>Settings</i> menu.  Then view the page for <i>Themes</i> under <i>Appearance</i>.</p></qt>");
 
@@ -45,13 +45,13 @@ NickListModel::NickListModel(Server* server) : QAbstractListModel(server)
                 "The meaning of admin, owner and halfop varies between different IRC servers.</p><p>"
                 "Hovering over any nick shows their current status. See the Konversation Handbook for more information."
                 "</p></qt>",
-                m_images->getNickIconPath(Images::Admin),
-                m_images->getNickIconPath(Images::Owner),
-                m_images->getNickIconPath(Images::Op),
-                m_images->getNickIconPath(Images::HalfOp),
-                m_images->getNickIconPath(Images::Voice),
-                m_images->getNickIconPath(Images::Normal),
-                m_images->getNickIconAwayPath());
+                images->getNickIconPath(Images::Admin),
+                images->getNickIconPath(Images::Owner),
+                images->getNickIconPath(Images::Op),
+                images->getNickIconPath(Images::HalfOp),
+                images->getNickIconPath(Images::Voice),
+                images->getNickIconPath(Images::Normal),
+                images->getNickIconAwayPath());
 
         m_icon = images->getNickIcon(Images::Normal, false);
     }
@@ -239,7 +239,8 @@ QHash<int, QByteArray> NickListModel::roleNames() const
 //TODO when would we need to call this?
 void NickListModel::updateMinimumRowHeight()
 {
-    m_minimumRowHeight = m_images->getNickIcon(Images::Normal, false).height() + 2;
+    Images* images = Application::instance()->images();
+    m_minimumRowHeight = images->getNickIcon(Images::Normal, false).height() + 2;
 }
 
 bool NickListModel::isNickOnline(const QString& nick) const
@@ -351,8 +352,8 @@ void NickListModel::setNickAway(const QString& nick, bool away)
 
 struct timestampLessThanSort
 {
-    ChannelNickListProxyModel* This;
-    timestampLessThanSort(ChannelNickListProxyModel* newThis)
+    ChannelNickListFilterModel* This;
+    timestampLessThanSort(ChannelNickListFilterModel* newThis)
     {
         This = newThis;
     }
@@ -362,7 +363,7 @@ struct timestampLessThanSort
     }
 };
 
-ChannelNickListProxyModel::ChannelNickListProxyModel(Channel* channel) : QSortFilterProxyModel(channel)
+ChannelNickListFilterModel::ChannelNickListFilterModel(Channel* channel) : QSortFilterProxyModel(channel)
 {
     //nick list model filters
     if (channel)
@@ -378,11 +379,11 @@ ChannelNickListProxyModel::ChannelNickListProxyModel(Channel* channel) : QSortFi
     }
 }
 
-ChannelNickListProxyModel::~ChannelNickListProxyModel()
+ChannelNickListFilterModel::~ChannelNickListFilterModel()
 {
 }
 
-void ChannelNickListProxyModel::insertNick(Nick2* item)
+void ChannelNickListFilterModel::insertNick(Nick2* item)
 {
     if (sourceNickModel()->isNickOnline(item->getNickname()))
     {
@@ -392,7 +393,7 @@ void ChannelNickListProxyModel::insertNick(Nick2* item)
     }
 }
 
-void ChannelNickListProxyModel::removeNick(const Nick2* item)
+void ChannelNickListFilterModel::removeNick(const Nick2* item)
 {
     if (sourceNickModel()->isNickOnline(item->getNickname()))
     {
@@ -401,12 +402,12 @@ void ChannelNickListProxyModel::removeNick(const Nick2* item)
 
 }
 
-NickListModel* ChannelNickListProxyModel::sourceNickModel() const
+NickListModel* ChannelNickListFilterModel::sourceNickModel() const
 {
     return static_cast<NickListModel*>(sourceModel());
 }
 
-QVariant ChannelNickListProxyModel::data(const QModelIndex& index, int role) const
+QVariant ChannelNickListFilterModel::data(const QModelIndex& index, int role) const
 {
     if (role == Qt::ToolTipRole && m_channel)
     {
@@ -422,12 +423,12 @@ QVariant ChannelNickListProxyModel::data(const QModelIndex& index, int role) con
     return sourceModel()->data(index, role);
 }
 
-bool ChannelNickListProxyModel::isNickInChannel(const QString& nick) const
+bool ChannelNickListFilterModel::isNickInChannel(const QString& nick) const
 {
     return sourceNickModel()->isNickInChannel(nick, m_channelName);
 }
 
-void ChannelNickListProxyModel::nickCompletion(IRCInput* inputBar)
+void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
 {
 
     int pos, oldPos;
@@ -597,7 +598,7 @@ void ChannelNickListProxyModel::nickCompletion(IRCInput* inputBar)
     inputBar->setTextCursor(cursor);
 }
 
-QString ChannelNickListProxyModel::completeNick(const QString& pattern, bool& complete, QStringList& found,
+QString ChannelNickListFilterModel::completeNick(const QString& pattern, bool& complete, QStringList& found,
                                                 bool skipNonAlfaNum, bool caseSensitive)
 {
     found.clear();
@@ -628,7 +629,6 @@ QString ChannelNickListProxyModel::completeNick(const QString& pattern, bool& co
         }
     }
 
-    //lessThanPtr lessThanVar = &ChannelNickListProxyModel::nickTimestampLessThan;
     qSort(foundNicks.begin(), foundNicks.end(), ::timestampLessThanSort(this));
 
     QList<Nick2*>::const_iterator i;
@@ -667,7 +667,7 @@ QString ChannelNickListProxyModel::completeNick(const QString& pattern, bool& co
     return QString();
 }
 
-bool ChannelNickListProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
+bool ChannelNickListFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
 {
     QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
 
@@ -675,7 +675,7 @@ bool ChannelNickListProxyModel::filterAcceptsRow(int sourceRow, const QModelInde
 }
 
 //TODO if there's any speed optimizations to be had, it's here.
-bool ChannelNickListProxyModel::lessThan(const QModelIndex& left, const QModelIndex& right) const
+bool ChannelNickListFilterModel::lessThan(const QModelIndex& left, const QModelIndex& right) const
 {
     Nick2* leftNick = static_cast<Nick2*>(left.internalPointer());
     Nick2* rightNick = static_cast<Nick2*>(right.internalPointer());
@@ -694,7 +694,7 @@ bool ChannelNickListProxyModel::lessThan(const QModelIndex& left, const QModelIn
     }
 }
 
-bool ChannelNickListProxyModel::nickTimestampLessThan(const Nick2* left, const Nick2* right) const
+bool ChannelNickListFilterModel::nickTimestampLessThan(const Nick2* left, const Nick2* right) const
 {
     int difference = left->getTimestamp(m_channelName) - right->getTimestamp(m_channelName);
 
@@ -707,7 +707,7 @@ bool ChannelNickListProxyModel::nickTimestampLessThan(const Nick2* left, const N
     return nickLessThan(left, right);
 }
 
-bool ChannelNickListProxyModel::nickLessThan(const Nick2* left, const Nick2* right) const
+bool ChannelNickListFilterModel::nickLessThan(const Nick2* left, const Nick2* right) const
 {
     if (Preferences::self()->sortCaseInsensitive())
     {
@@ -725,7 +725,7 @@ bool ChannelNickListProxyModel::nickLessThan(const Nick2* left, const Nick2* rig
     }
 }
 
-bool ChannelNickListProxyModel::nickHostmaskLessThan(const Nick2* left, const Nick2* right) const
+bool ChannelNickListFilterModel::nickHostmaskLessThan(const Nick2* left, const Nick2* right) const
 {
     if (Preferences::self()->sortCaseInsensitive())
     {
@@ -735,7 +735,7 @@ bool ChannelNickListProxyModel::nickHostmaskLessThan(const Nick2* left, const Ni
     return left->getHostmask() < right->getHostmask();
 }
 
-bool ChannelNickListProxyModel::nickActivityLessThan(const Nick2* left, const Nick2* right) const
+bool ChannelNickListFilterModel::nickActivityLessThan(const Nick2* left, const Nick2* right) const
 {
     int difference = left->getRecentActivity(m_channelName) - right->getRecentActivity(m_channelName);
 
@@ -745,7 +745,7 @@ bool ChannelNickListProxyModel::nickActivityLessThan(const Nick2* left, const Ni
     return nickTimestampLessThan(left, right);
 }
 
-bool ChannelNickListProxyModel::nickStatusLessThan(const Nick2* left, const Nick2* right) const
+bool ChannelNickListFilterModel::nickStatusLessThan(const Nick2* left, const Nick2* right) const
 {
     int difference = left->getStatusValue(m_channelName) - right->getStatusValue(m_channelName);
 

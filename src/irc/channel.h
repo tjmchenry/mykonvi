@@ -19,6 +19,7 @@
 #include "server.h"
 #include "chatwindow.h"
 #include "channelnick.h"
+#include "nicklistmodel.h"
 
 #ifdef HAVE_QCA2
 #include "cipher.h"
@@ -26,6 +27,7 @@
 
 #include <QTimer>
 #include <QString>
+#include <QListView>
 
 
 class QLabel;
@@ -49,11 +51,13 @@ class IRCInput;
 class NickChangeDialog;
 class TopicHistoryModel;
 class CipherFilterProxyModel;
+class ChannelNickListFilterModel;
 
 namespace Konversation
 {
     class TopicLabel;
     class ChannelOptionsDialog;
+    class ChannelSettings;
 }
 
 class NickList : public QList<Nick*>
@@ -321,6 +325,8 @@ class Channel : public ChatWindow
         KLineEdit* limit; //TODO: this GUI element is the only storage for the mode
 
         NickListView* nicknameListView;
+        QListView* m_nicknameListView2;
+        ChannelNickListFilterModel* m_channelNickListModel;
         KHBox* commandLineBox;
         KVBox* nickListButtons;
         QWidget* m_buttonsGrid;

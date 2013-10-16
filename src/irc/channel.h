@@ -326,6 +326,7 @@ class Channel : public ChatWindow
 
         NickListView* nicknameListView;
         QListView* m_nicknameListView2;
+        QListView* m_nicknameAllListView;
         ChannelNickListFilterModel* m_channelNickListModel;
         KHBox* commandLineBox;
         KVBox* nickListButtons;

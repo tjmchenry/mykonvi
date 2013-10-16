@@ -34,8 +34,8 @@ Nick2::Nick2(const QString& nick, Server* server) : QObject()
 
     m_queryTooltip = QString();
 
-    connect(this, SIGNAL(channelPropertiesChanged(QString)), this, SLOT(updateStatusValue(QString)));
-    connect(this, SIGNAL(channelPropertiesChanged(QString)), this, SLOT(updateTooltips(QString)));
+    connect(this, SIGNAL(channelPropertiesChanged(const QString&)), this, SLOT(updateStatusValue(const QString&)));
+    connect(this, SIGNAL(channelPropertiesChanged(const QString&)), this, SLOT(updateTooltips(const QString&)));
 }
 
 Nick2::Nick2(const Nick2&)
@@ -49,28 +49,29 @@ Nick2::~Nick2()
 
 void Nick2::addChannel(const QString& channel)
 {
-    ChannelProperties properties = ChannelProperties();
+    ChannelProperties* properties = new ChannelProperties();
 
-    Modes modes = Modes(); //qaohv
-    modes.insert('q', false);
-    modes.insert('a', false);
-    modes.insert('o', false);
-    modes.insert('h', false);
-    modes.insert('v', false);
+    Modes* modes = new Modes(); //qaohv
+    modes->insert('q', false);
+    modes->insert('a', false);
+    modes->insert('o', false);
+    modes->insert('h', false);
+    modes->insert('v', false);
 
-    properties.insert("modes", QVariant::fromValue(modes));
-    properties.insert("activity", 0);
-    properties.insert("timestamp", 0);
-    properties.insert("statusValue", 0);
-    properties.insert("icon", QPixmap());
-    properties.insert("tooltip", QString());
-
+    properties->insert("modes", QVariant::fromValue(modes));
+    properties->insert("activity", 0);
+    properties->insert("timestamp", 0);
+    properties->insert("statusValue", 0);
+    properties->insert("icon", QPixmap());
+    properties->insert("tooltip", QString());
+    //kDebug() << "Channel name inserted " << channel;
     m_channelHash.insert(channel, properties);
     emit channelPropertiesChanged(channel);
 }
 
 void Nick2::removeChannel(const QString& channel)
 {
+    kDebug() << "Channel removed";
     m_channelHash.remove(channel);
 }
 
@@ -81,19 +82,20 @@ QList<QString> Nick2::getChannels() const
 
 bool Nick2::isInChannel(const QString& channel) const
 {
+    //kDebug() << "Channel Name searched for: " << channel;
     return m_channelHash.contains(channel);
 }
 
 bool Nick2::isInAnyChannel() const
 {
-    return m_channelHash.isEmpty();
+    return !m_channelHash.isEmpty();
 }
 
 bool Nick2::isOwner(const QString& channel) const
 {
     if (isInChannel(channel))
     {
-        return m_channelHash[channel]["modes"].value<Modes>()['q'];
+        return m_channelHash[channel]->value("modes").value<Modes*>()->value('q');
     }
     return false;
 }
@@ -101,7 +103,7 @@ bool Nick2::isOwner(const QString& channel) const
 bool Nick2::isAdmin(const QString& channel) const
 {
     if (isInChannel(channel))
-        return m_channelHash[channel]["modes"].value<Modes>()['a'];
+        return m_channelHash[channel]->value("modes").value<Modes*>()->value('a');
 
     return false;
 }
@@ -109,7 +111,7 @@ bool Nick2::isAdmin(const QString& channel) const
 bool Nick2::isOp(const QString& channel) const
 {
     if (isInChannel(channel))
-        return m_channelHash[channel]["modes"].value<Modes>()['o'];
+        return m_channelHash[channel]->value("modes").value<Modes*>()->value('o');
 
     return false;
 }
@@ -117,7 +119,7 @@ bool Nick2::isOp(const QString& channel) const
 bool Nick2::isHalfOp(const QString& channel) const
 {
     if (isInChannel(channel))
-        return m_channelHash[channel]["modes"].value<Modes>()['h'];
+        return m_channelHash[channel]->value("modes").value<Modes*>()->value('h');
 
     return false;
 }
@@ -125,7 +127,7 @@ bool Nick2::isHalfOp(const QString& channel) const
 bool Nick2::hasVoice(const QString& channel) const
 {
     if (isInChannel(channel))
-        return m_channelHash[channel]["modes"].value<Modes>()['v'];
+        return m_channelHash[channel]->value("modes").value<Modes*>()->value('v');
 
     return false;
 }
@@ -192,7 +194,7 @@ bool Nick2::setOwner(const QString& channel, bool state)
     if (!isInChannel(channel) || isOwner(channel) == state)
         return false;
 
-    m_channelHash[channel]["modes"].value<Modes>()['q'] = state;
+    m_channelHash[channel]->value("modes").value<Modes*>()->insert('q', state);
 
     emit channelPropertiesChanged(channel);
     emit nickChanged(getNickname());
@@ -205,7 +207,7 @@ bool Nick2::setAdmin(const QString& channel, bool state)
     if (!isInChannel(channel) || isAdmin(channel) == state)
         return false;
 
-    m_channelHash[channel]["modes"].value<Modes>()['a'] = state;
+    m_channelHash[channel]->value("modes").value<Modes*>()->insert('a', state);
 
     emit channelPropertiesChanged(channel);
     emit nickChanged(getNickname());
@@ -218,7 +220,7 @@ bool Nick2::setOp(const QString& channel, bool state)
     if (!isInChannel(channel) || isOp(channel) == state)
         return false;
 
-    m_channelHash[channel]["modes"].value<Modes>()['o'] = state;
+    m_channelHash[channel]->value("modes").value<Modes*>()->insert('o', state);
 
     emit channelPropertiesChanged(channel);
     emit nickChanged(getNickname());
@@ -231,7 +233,7 @@ bool Nick2::setHalfOp(const QString& channel, bool state)
     if (!isInChannel(channel) || isHalfOp(channel) == state)
         return false;
 
-    m_channelHash[channel]["modes"].value<Modes>()['h'] = state;
+    m_channelHash[channel]->value("modes").value<Modes*>()->insert('h', state);
 
     emit channelPropertiesChanged(channel);
     emit nickChanged(getNickname());
@@ -244,7 +246,8 @@ bool Nick2::setVoice(const QString& channel, bool state)
     if (!isInChannel(channel) || hasVoice(channel) == state)
         return false;
 
-    m_channelHash[channel]["modes"].value<Modes>()['v'] = state;
+    m_channelHash[channel]->value("modes").value<Modes*>()->insert('v', state);
+    kDebug() << hasVoice(channel);
 
     emit channelPropertiesChanged(channel);
     emit nickChanged(getNickname());
@@ -277,30 +280,31 @@ void Nick2::updateStatusValue(const QString& channel)
             value = 1;
             away = true;
         }
-        else if (isOwner(channel))
+
+        if (isOwner(channel))
         {
             value += 64;
-            icon = images->getNickIcon(Images::Normal, away);
+            icon = images->getNickIcon(Images::Owner, away);
         }
         else if (isAdmin(channel))
         {
             value += 128;
-            icon = images->getNickIcon(Images::Normal, away);
+            icon = images->getNickIcon(Images::Admin, away);
         }
         else if (isOp(channel))
         {
             value += 32;
-            icon = images->getNickIcon(Images::Normal, away);
+            icon = images->getNickIcon(Images::Op, away);
         }
         else if (isHalfOp(channel))
         {
             value += 16;
-            icon = images->getNickIcon(Images::Normal, away);
+            icon = images->getNickIcon(Images::HalfOp, away);
         }
         else if (hasVoice(channel))
         {
             value += 8;
-            icon = images->getNickIcon(Images::Normal, away);
+            icon = images->getNickIcon(Images::Voice, away);
         }
         else
         {
@@ -308,15 +312,16 @@ void Nick2::updateStatusValue(const QString& channel)
             icon = images->getNickIcon(Images::Normal, away);
         }
 
-        m_channelHash[channel]["statusValue"] = value;
-        m_channelHash[channel]["icon"] = icon;
+        kDebug() << "Updating status value" << channel << ": " << value << isAway() << isAdmin(channel) << isOwner(channel) << isOp(channel) << isHalfOp(channel) << hasVoice(channel);
+        m_channelHash[channel]->insert("statusValue", value);
+        m_channelHash[channel]->insert("icon", icon);
     }
 }
 
 int Nick2::getStatusValue(const QString& channel) const
 {
     if (isInChannel(channel))
-        return m_channelHash[channel]["statusValue"].toInt();
+        return m_channelHash[channel]->value("statusValue").toInt();
 
     return 0;
 }
@@ -324,7 +329,7 @@ int Nick2::getStatusValue(const QString& channel) const
 QPixmap Nick2::getIcon(const QString& channel) const
 {
     if (isInChannel(channel))
-        return m_channelHash[channel]["icon"].value<QPixmap>();
+        return m_channelHash[channel]->value("icon").value<QPixmap>();
 
     return QPixmap();
 }
@@ -358,7 +363,7 @@ void Nick2::setHostmask(const QString& newMask)
 QString Nick2::getChannelTooltip(const QString& channel) const
 {
     if (isInChannel(channel))
-        return m_channelHash[channel]["tooltip"].toString();
+        return m_channelHash[channel]->value("tooltip").toString();
 
     return QString();
 }
@@ -404,7 +409,7 @@ void Nick2::updateTooltips(const QString& channel)
 
         tooltip << "</table></qt>";
 
-        m_channelHash[channel]["tooltip"] = strTooltip;
+        m_channelHash[channel]->insert("tooltip", strTooltip);
     }
 }
 
@@ -447,7 +452,7 @@ void Nick2::tooltipTableData(QTextStream &tooltip) const
 uint Nick2::getRecentActivity(const QString& channel) const
 {
     if (isInChannel(channel))
-        return m_channelHash[channel]["activity"].toUInt();
+        return m_channelHash[channel]->value("activity").toUInt();
 
     return 0;
 }
@@ -455,19 +460,19 @@ uint Nick2::getRecentActivity(const QString& channel) const
 void Nick2::moreActive(const QString& channel)
 {
     if (isInChannel(channel))
-        m_channelHash[channel]["activity"] = m_channelHash[channel]["activity"].toUInt() + 1;
+        m_channelHash[channel]->insert("activity", m_channelHash[channel]->value("activity").toUInt() + 1);
 }
 
 void Nick2::lessActive(const QString& channel)
 {
     if (isInChannel(channel))
-        m_channelHash[channel]["activity"] = m_channelHash[channel]["activity"].toUInt() - 1;
+        m_channelHash[channel]->insert("activity", m_channelHash[channel]->value("activity").toUInt() - 1);
 }
 
 uint Nick2::getTimestamp(const QString& channel) const
 {
     if (isInChannel(channel))
-        return m_channelHash[channel]["timestamp"].toUInt();
+        return m_channelHash[channel]->value("timestamp").toUInt();
 
     return 0;
 }
@@ -475,7 +480,7 @@ uint Nick2::getTimestamp(const QString& channel) const
 void Nick2::setTimestamp(const QString& channel, uint timestamp)
 {
     if (isInChannel(channel))
-        m_channelHash[channel]["timestamp"] = timestamp;
+        m_channelHash[channel]->insert("timestamp", timestamp);
 }
 
 QString Nick2::getLoweredNickname() const

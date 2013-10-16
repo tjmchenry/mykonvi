@@ -20,9 +20,9 @@
 
 typedef QHash<char, bool> Modes;
 typedef QHash<QString, QVariant> ChannelProperties;
-typedef QHash<QString, ChannelProperties> ChannelHash;
+typedef QHash<QString, ChannelProperties*> ChannelHash;
 
-Q_DECLARE_METATYPE(Modes);
+Q_DECLARE_METATYPE(Modes*);
 Q_DECLARE_METATYPE(ChannelProperties);
 Q_DECLARE_METATYPE(ChannelHash);
 

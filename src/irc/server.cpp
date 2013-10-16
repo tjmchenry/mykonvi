@@ -1768,11 +1768,19 @@ ChannelNickPtr Server::setChannelNick(const QString& channelName, const QString&
         {
             channelNick = addNickToUnjoinedChannelsList(channelName, nickname);
             channelNick->setMode(mode);
+            m_nickListModel2->setNickMode(nickname, channelName, mode);
         }
         else return ChannelNickPtr(); //! TODO FIXME null null null
     }
 
     if (mode != 99) channelNick->setMode(mode);
+
+    m_nickListModel2->addNickToChannel(nickname, channelName);
+
+    //TODO why 99?
+    if(mode != 99)
+        m_nickListModel2->setNickMode(nickname, channelName, mode);
+
     return channelNick;
 }
 
@@ -2736,6 +2744,8 @@ Channel* Server::joinChannel(const QString& name, const QString& hostmask)
         nickInfo->setHostmask(hostmask);
     }
 
+    m_nickListModel2->setNickHostmask(getNickname(), hostmask);
+
     channel->joinNickname(channelNick);
 
     return channel;
@@ -2799,6 +2809,9 @@ void Server::updateChannelMode(const QString &updater, const QString &channelNam
 
         // Note that channel will be moved to joined list if necessary.
         addNickToJoinedChannelsList(channelName, parameter);
+
+        //TODO update the mode as well.
+        m_nickListModel2->setNickMode(parameter, channelName, mode, plus);
     }
 
     // Update channel ban list.
@@ -2867,6 +2880,8 @@ void Server::queueNicks(const QString& channelName, const QStringList& nicknameL
 // Returns the NickInfo for the nickname.
 ChannelNickPtr Server::addNickToJoinedChannelsList(const QString& channelName, const QString& nickname)
 {
+    m_nickListModel2->addNickToChannel(nickname, channelName);
+
     bool doChannelJoinedSignal = false;
     bool doWatchedNickChangedSignal = false;
     bool doChannelMembersChangedSignal = false;
@@ -2930,6 +2945,8 @@ ChannelNickPtr Server::addNickToJoinedChannelsList(const QString& channelName, c
 // Returns the NickInfo for the nickname.
 ChannelNickPtr Server::addNickToUnjoinedChannelsList(const QString& channelName, const QString& nickname)
 {
+    m_nickListModel2->addNickToChannel(nickname, channelName);
+
     bool doChannelUnjoinedSignal = false;
     bool doWatchedNickChangedSignal = false;
     bool doChannelMembersChangedSignal = false;
@@ -3265,6 +3282,8 @@ void Server::renameNickInfo(NickInfoPtr nickInfo, const QString& newname)
     {
         kDebug() << "was called for newname='" << newname << "' but nickInfo is null";
     }
+
+    m_nickListModel2->setNewNickname(nickInfo->getNickname(), newname);
 }
 
 Channel* Server::nickJoinsChannel(const QString &channelName, const QString &nickname, const QString &hostmask)
@@ -3274,6 +3293,8 @@ Channel* Server::nickJoinsChannel(const QString &channelName, const QString &nic
     {
         // Update NickInfo.
         ChannelNickPtr channelNick = addNickToJoinedChannelsList(channelName, nickname);
+        m_nickListModel2->setNickHostmask(nickname, hostmask);
+
         NickInfoPtr nickInfo = channelNick->getNickInfo();
         if ((nickInfo->getHostmask() != hostmask) && !hostmask.isEmpty())
         {
@@ -3296,6 +3317,8 @@ void Server::addHostmaskToNick(const QString& sourceNick, const QString& sourceH
             nickInfo->setHostmask(sourceHostmask);
         }
     }
+
+    m_nickListModel2->setNickHostmask(sourceNick, sourceHostmask);
 }
 
 Channel* Server::removeNickFromChannel(const QString &channelName, const QString &nickname, const QString &reason, bool quit)
@@ -3321,6 +3344,8 @@ Channel* Server::removeNickFromChannel(const QString &channelName, const QString
         QString nicky = nickname;
         deleteNickIfUnlisted(nicky);
     }
+
+    m_nickListModel2->removeNickFromChannel(nickname, channelName);
 
     return outChannel;
 }
@@ -3362,6 +3387,8 @@ void Server::removeNickFromServer(const QString &nickname,const QString &reason)
 
 void Server::renameNick(const QString &nickname, const QString &newNick)
 {
+    m_nickListModel2->setNewNickname(nickname, newNick);
+
     if(nickname.isEmpty() || newNick.isEmpty())
     {
         kDebug() << "called with empty strings!  Trying to rename '" << nickname << "' to '" << newNick << "'";
@@ -3412,6 +3439,8 @@ void Server::renameNick(const QString &nickname, const QString &newNick)
 
 void Server::userhost(const QString& nick,const QString& hostmask,bool away,bool /* ircOp */)
 {
+    m_nickListModel2->setNickHostmask(nick, hostmask);
+    m_nickListModel2->setNickAway(nick, away);
     addHostmaskToNick(nick, hostmask);
     // remember my IP for DCC things
                                                   // myself
@@ -3912,6 +3941,8 @@ void Server::requestUnaway()
 
 void Server::setAway(bool away)
 {
+    m_nickListModel2->setNickAway(getNickname(), away);
+
     IdentityPtr identity = getIdentity();
 
     if (away)

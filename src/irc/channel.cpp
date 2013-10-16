@@ -206,9 +206,11 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
     nicknameListView->installEventFilter(this);
 
     m_channelNickListModel = new ChannelNickListFilterModel(this);
+    m_channelNickListModel->setDynamicSortFilter(true);
 
     m_nicknameListView2 = new QListView(nickListButtons);
     m_nicknameListView2->setModel(m_channelNickListModel);
+    m_nicknameAllListView = new QListView(nickListButtons);
 
     // initialize buttons grid, will be set up in updateQuickButtons
     m_buttonsGrid = 0;
@@ -331,6 +333,7 @@ void Channel::setServer(Server* server)
     refreshModeButtons();
     nicknameCombobox->setModel(m_server->nickListModel());
     m_channelNickListModel->setSourceModel(m_server->nickListModel2());
+    m_nicknameAllListView->setModel(m_server->nickListModel2());
 
     connect(awayLabel, SIGNAL(unaway()), m_server, SLOT(requestUnaway()));
     connect(awayLabel, SIGNAL(awayMessageChanged(QString)), m_server, SLOT(requestAway(QString)));
@@ -1434,8 +1437,11 @@ void Channel::updateMode(const QString& sourceNick, char mode, bool plus, const 
     // Note: nick repositioning in the nicknameListView should be
     // triggered by nickinfo / channelnick signals
 
+    m_server->nickListModel2()->setNickMode(parameter, getName(), mode, plus);
+
     QString message;
     ChannelNickPtr parameterChannelNick = m_server->getChannelNick(getName(), parameter);
+
 
     bool fromMe = false;
     bool toMe = false;
@@ -2540,6 +2546,7 @@ void Channel::processQueuedNicks(bool flush)
             ChannelNickPtr nick = m_server->addNickToJoinedChannelsList(getName(), nickname);
             Q_ASSERT(nick);
             nick->setMode(mode);
+            m_server->nickListModel2()->setNickMode(nickname, getName(), mode);
 
             fastAddNickname(nick);
 
@@ -2736,6 +2743,8 @@ void Channel::appendAction(const QString& nickname, const QString& message)
 
 void Channel::nickActive(const QString& nickname) //FIXME reported to crash, can't reproduce
 {
+    m_server->nickListModel2()->setNickMoreActive(nickname, getName());
+
     ChannelNickPtr channelnick=getChannelNick(nickname);
     //XXX Would be nice to know why it can be null here...
     if (channelnick)

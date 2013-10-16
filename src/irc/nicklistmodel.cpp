@@ -20,6 +20,11 @@ NickListModel::NickListModel(Server* server) : QAbstractListModel(server)
     m_nickHash = QHash<QString, Nick2*>();
     m_server = server;
     m_hostmask = false;
+
+    m_delayedResetTimer = new QTimer(this);
+    m_delayedResetTimer->setSingleShot(true);
+    m_delayedResetTimer->setInterval(100);
+
     Images* images = Application::instance()->images();
 
     updateMinimumRowHeight();
@@ -55,10 +60,17 @@ NickListModel::NickListModel(Server* server) : QAbstractListModel(server)
 
         m_icon = images->getNickIcon(Images::Normal, false);
     }
+
+    connect(m_delayedResetTimer, SIGNAL(timeout()), this, SLOT(slotReset()));
 }
 
 NickListModel::~NickListModel()
 {
+}
+
+void NickListModel::slotReset()
+{
+    reset();
 }
 
 void NickListModel::clear()
@@ -69,10 +81,11 @@ void NickListModel::clear()
 void NickListModel::insertNick(Nick2* item)
 {
     m_nickHash.insert(item->getNickname(), item);
-    reset();
+    m_delayedResetTimer->start();
 }
 
 /* insert without resetting the model */
+//TODO broken
 void NickListModel::fastInsertNick(Nick2* item)
 {
     m_nickHash.insert(item->getNickname(), item);
@@ -103,10 +116,11 @@ void NickListModel::removeNick(const QString& nick)
     if (isNickOnline(nick))
     {
         uint position = getHashPosition(nick);
+        QHash<QString, Nick2*>::iterator i = m_nickHash.find(nick);
 
         beginRemoveRows(QModelIndex(), position, position);
 
-        m_nickHash.remove(nick);
+        m_nickHash.erase(i);
 
         endRemoveRows();
     }
@@ -114,14 +128,12 @@ void NickListModel::removeNick(const QString& nick)
 
 void NickListModel::removeNickFromChannel(const QString& nick, const QString& channel)
 {
-    kDebug() << "Removing nick from channel";
     if (isNickOnline(nick))
     {
         m_nickHash[nick]->removeChannel(channel);
 
         if(!m_nickHash[nick]->isInAnyChannel())
         {
-            kDebug() << "Removed nick completely";
             removeNick(nick);
         }
         else
@@ -130,6 +142,34 @@ void NickListModel::removeNickFromChannel(const QString& nick, const QString& ch
             QModelIndex index = NickListModel::index(position, 0);
             emit dataChanged(index, index); //changes tooltips in existing channels, and all roles in removed channel
         }
+    }
+}
+
+void NickListModel::removeAllNicksFromChannel(const QString& channel)
+{
+    kDebug() << "In remove all nicks from channel";
+    if (!m_nickHash.isEmpty())
+    {
+        QHash<QString, Nick2*>::iterator i = m_nickHash.begin();
+        uint position = 0;
+
+        while (i != m_nickHash.end())
+        {
+            i.value()->removeChannel(channel);
+
+            if (!i.value()->isInAnyChannel())
+            {
+                beginRemoveRows(QModelIndex(), position, position);
+                i = m_nickHash.erase(i);
+                endRemoveRows();
+            }
+            else
+                ++i;
+
+            position++;
+        }
+
+        m_delayedResetTimer->start();
     }
 }
 
@@ -226,6 +266,10 @@ QVariant NickListModel::data(const QModelIndex& index, int role) const
     {
         return m_whatsThis;
     }
+    else if (role == NickRole)
+    {
+        return item->getNickname();
+    }
 
     return QVariant();
 }
@@ -246,7 +290,6 @@ void NickListModel::updateMinimumRowHeight()
 {
     Images* images = Application::instance()->images();
     m_minimumRowHeight = images->getNickIcon(Images::Normal, false).height() + 2;
-    kDebug() << "Minimum Row Height: " << m_minimumRowHeight;
 }
 
 bool NickListModel::isNickOnline(const QString& nick) const
@@ -360,7 +403,6 @@ uint NickListModel::getNickStatusValue(const QString& nick, const QString& chann
 
 void NickListModel::setNickMode(const QString& nick, const QString& channel, unsigned int mode)
 {
-    kDebug() << "Setting Nick Mode for: " << nick;
     if (isNickOnline(nick))
     {
         m_nickHash[nick]->setMode(channel, mode);
@@ -375,7 +417,6 @@ void NickListModel::setNickMode(const QString& nick, const QString& channel, uns
 
 void NickListModel::setNickMode(const QString& nick, const QString& channel, char mode, bool state)
 {
-    kDebug() << "Setting Nick Mode for: " << nick;
     if (isNickOnline(nick))
     {
         m_nickHash[nick]->setMode(channel, mode, state);
@@ -449,13 +490,14 @@ void ChannelNickListFilterModel::insertNick(Nick2* item)
     }
 }
 
-void ChannelNickListFilterModel::removeNick(const Nick2* item)
+void ChannelNickListFilterModel::removeNick(const QString& nick)
 {
-    if (sourceNickModel()->isNickOnline(item->getNickname()))
-    {
-        sourceNickModel()->removeNickFromChannel(item->getNickname(), m_channelName);
-    }
+    sourceNickModel()->removeNickFromChannel(nick, m_channelName);
+}
 
+void ChannelNickListFilterModel::removeAllNicks()
+{
+    sourceNickModel()->removeAllNicksFromChannel(m_channelName);
 }
 
 NickListModel* ChannelNickListFilterModel::sourceNickModel() const
@@ -472,11 +514,11 @@ QVariant ChannelNickListFilterModel::data(const QModelIndex& index, int role) co
     {
         Nick2* nick = static_cast<Nick2*>(mapToSource(index).internalPointer());
 
-        if (role == Qt::ToolTipRole)
+        if (nick && role == Qt::ToolTipRole)
             return nick->getChannelTooltip(m_channelName);
-        else if (role == Qt::DecorationRole)
+        else if (nick && role == Qt::DecorationRole)
             return nick->getIcon(m_channelName);
-        else if (role == Qt::ForegroundRole && nick->isAway())
+        else if (nick && role == Qt::ForegroundRole && nick->isAway())
             return qApp->palette("QListView").brush(QPalette::Disabled, QPalette::Text);
     }
 
@@ -675,8 +717,9 @@ QString ChannelNickListFilterModel::completeNick(const QString& pattern, bool& c
     regexp.setCaseSensitivity(caseSensitive ? Qt::CaseSensitive : Qt::CaseInsensitive);
     for (int i = 0; i < rowCount(); ++i)
     {
+        QString nickName = QString();
         Nick2* nick = static_cast<Nick2*>(mapToSource(index(i, 0)).internalPointer());
-        QString nickName = nick->getNickname();
+        if (nick) nickName = nick->getNickname();
 
         if (!prefix.isEmpty() && nickName.contains(prefixCharacter))
         {
@@ -732,7 +775,10 @@ bool ChannelNickListFilterModel::filterAcceptsRow(int sourceRow, const QModelInd
     QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
     Nick2* nick = static_cast<Nick2*>(index.internalPointer());
 
-    return nick->isInChannel(m_channelName);
+    if (nick)
+        return nick->isInChannel(m_channelName);
+
+    return false;
 }
 
 //TODO if there's any speed optimizations to be had, it's here.
@@ -740,18 +786,24 @@ bool ChannelNickListFilterModel::lessThan(const QModelIndex& left, const QModelI
 {
     Nick2* leftNick = static_cast<Nick2*>(left.internalPointer());
     Nick2* rightNick = static_cast<Nick2*>(right.internalPointer());
-    if(Preferences::self()->sortByActivity())
+
+    if (leftNick && rightNick)
     {
-        return nickActivityLessThan(leftNick, rightNick);
+        if(Preferences::self()->sortByActivity())
+        {
+            return nickActivityLessThan(leftNick, rightNick);
+        }
+        else if(Preferences::self()->sortByStatus())
+        {
+            return nickStatusLessThan(leftNick, rightNick);
+        }
+        else
+        {
+            return nickLessThan(leftNick, rightNick);
+        }
     }
-    else if(Preferences::self()->sortByStatus())
-    {
-        return nickStatusLessThan(leftNick, rightNick);
-    }
-    else
-    {
-        return nickLessThan(leftNick, rightNick);
-    }
+
+    return false;
 }
 
 bool ChannelNickListFilterModel::nickTimestampLessThan(const Nick2* left, const Nick2* right) const

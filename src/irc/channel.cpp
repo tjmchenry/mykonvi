@@ -462,6 +462,9 @@ void Channel::purgeNicks()
 {
     m_ownChannelNick = 0;
 
+    //delete all nicks in the filter model
+    m_channelNickListModel->removeAllNicks();
+
     // Purge nickname list
     qDeleteAll(nicknameList);
     nicknameList.clear();

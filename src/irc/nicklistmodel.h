@@ -40,6 +40,7 @@ class NickListModel : public QAbstractListModel
 
         void removeNick(const QString& nick);
         void removeNickFromChannel(const QString& nick, const QString& channel);
+        void removeAllNicksFromChannel(const QString& channel);
 
         uint getHashPosition(const QString& nick) const;
 
@@ -70,12 +71,16 @@ class NickListModel : public QAbstractListModel
 
         void setHostmaskColumn(bool hostmask) { m_hostmask = hostmask; }
 
+    public slots:
+        void slotReset();
+
 
     private:
         QHash<QString, Nick2*> m_nickHash;
         Server* m_server;
         bool m_hostmask;
         QString m_whatsThis;
+        QTimer* m_delayedResetTimer;
         QPixmap m_icon;
 
         void updateMinimumRowHeight();
@@ -95,7 +100,8 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
         bool isNickInChannel(const QString& nick) const;
 
         void insertNick(Nick2* item);
-        void removeNick(const Nick2* item);
+        void removeNick(const QString& nick);
+        void removeAllNicks();
 
         NickListModel* sourceNickModel() const;
 

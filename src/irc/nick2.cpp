@@ -64,14 +64,13 @@ void Nick2::addChannel(const QString& channel)
     properties->insert("statusValue", 0);
     properties->insert("icon", QPixmap());
     properties->insert("tooltip", QString());
-    //kDebug() << "Channel name inserted " << channel;
+
     m_channelHash.insert(channel, properties);
     emit channelPropertiesChanged(channel);
 }
 
 void Nick2::removeChannel(const QString& channel)
 {
-    kDebug() << "Channel removed";
     m_channelHash.remove(channel);
 }
 
@@ -82,7 +81,6 @@ QList<QString> Nick2::getChannels() const
 
 bool Nick2::isInChannel(const QString& channel) const
 {
-    //kDebug() << "Channel Name searched for: " << channel;
     return m_channelHash.contains(channel);
 }
 
@@ -247,7 +245,6 @@ bool Nick2::setVoice(const QString& channel, bool state)
         return false;
 
     m_channelHash[channel]->value("modes").value<Modes*>()->insert('v', state);
-    kDebug() << hasVoice(channel);
 
     emit channelPropertiesChanged(channel);
     emit nickChanged(getNickname());
@@ -273,7 +270,6 @@ void Nick2::updateStatusValue(const QString& channel)
 
         Images* images = Application::instance()->images();
         QPixmap icon;
-
 
         if (isAway()) //FIXME this doesn't really make sense why would away people be worth 1 more?
         {
@@ -312,7 +308,6 @@ void Nick2::updateStatusValue(const QString& channel)
             icon = images->getNickIcon(Images::Normal, away);
         }
 
-        kDebug() << "Updating status value" << channel << ": " << value << isAway() << isAdmin(channel) << isOwner(channel) << isOp(channel) << isHalfOp(channel) << hasVoice(channel);
         m_channelHash[channel]->insert("statusValue", value);
         m_channelHash[channel]->insert("icon", icon);
     }
@@ -383,7 +378,7 @@ void Nick2::updateTooltips(const QString& channel)
             updateTooltips(i.key());
         }
     }
-    else
+    else if (isInChannel(channel))
     {
         QString strTooltip;
         QTextStream tooltip( &strTooltip, QIODevice::WriteOnly );

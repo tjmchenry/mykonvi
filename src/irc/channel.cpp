@@ -2233,6 +2233,8 @@ void Channel::fadeActivity()
     foreach (Nick *nick,  nicknameList) {
         nick->getChannelNick()->lessActive();
     }
+
+    m_channelNickListModel->setAllNicksLessActive();
 }
 
 bool Channel::canBeFrontView()

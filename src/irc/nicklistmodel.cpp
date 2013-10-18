@@ -392,6 +392,27 @@ void NickListModel::setNickMoreActive(const QString& nick, const QString& channe
     }
 }
 
+void NickListModel::setAllChannelNicksMoreActive(const QString& channel)
+{
+    if (!m_nickHash.isEmpty())
+    {
+        QHash<QString, Nick2*>::const_iterator i = m_nickHash.constBegin();
+        uint position = 0;
+
+        for (i = m_nickHash.constBegin(); i != m_nickHash.constEnd(); ++i)
+        {
+            if (isNickInChannel(i.key(), channel))
+            {
+                QModelIndex index = NickListModel::index(position, 0);
+
+                emit dataChanged(index, index);
+            }
+
+            position++;
+        }
+    }
+}
+
 //timestamp
 uint NickListModel::getNickTimestamp(const QString& nick, const QString& channel) const
 {
@@ -509,6 +530,12 @@ void ChannelNickListFilterModel::removeAllNicks()
 {
     if (sourceNickModel())
         sourceNickModel()->removeAllNicksFromChannel(m_channelName);
+}
+
+void ChannelNickListFilterModel::setAllNicksLessActive()
+{
+    if (sourceNickModel())
+        sourceNickModel()->setAllChannelNicksMoreActive(m_channelName);
 }
 
 NickListModel* ChannelNickListFilterModel::sourceNickModel() const

@@ -62,6 +62,7 @@ class NickListModel : public QAbstractListModel
         void setNewNickname(const QString& nick, const QString& newNick);
         uint getNickActivity(const QString& nick, const QString& channel) const;
         void setNickMoreActive(const QString& nick, const QString& channel);
+        void setAllChannelNicksMoreActive(const QString& channel);
         uint getNickTimestamp(const QString& nick, const QString& channel) const;
         uint getNickStatusValue(const QString& nick, const QString& channel) const;
         QList<QString> getNickChannels(const QString& nick) const;
@@ -103,6 +104,8 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
         void insertNick(Nick2* item);
         void removeNick(const QString& nick);
         void removeAllNicks();
+
+        void setAllNicksLessActive();
 
         NickListModel* sourceNickModel() const;
 

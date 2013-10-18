@@ -305,12 +305,12 @@ bool NickListModel::isNickIdentified(const QString& nick) const
     return false;
 }
 
-QList<QString> NickListModel::getNickChannels(const QString& nick) const
+QStringList NickListModel::getNickChannels(const QString& nick) const
 {
     if (isNickOnline(nick))
         return m_nickHash[nick]->getChannels();
 
-    return QList<QString>();
+    return QStringList();
 }
 
 bool NickListModel::isNickInChannel(const QString& nick, const QString& channel) const

@@ -185,7 +185,7 @@ void ServerISON::recalculateAddressees()
 
         for(QStringList::iterator it = m_watchList.begin(); it != itEnd; ++it)
         {
-            if (m_server->getNickJoinedChannels(*it).isEmpty())
+            if (m_server->getSharedChannels(*it).isEmpty())
             {
                 m_ISONList.append(*it);
             }
@@ -227,7 +227,7 @@ bool joined, bool parted, const QString& nickname)
     // Whenever a nick on the watch list leaves the last joined channel, must recalculate lists.
     // The nick will be added to the ISON list.
     if (joined && parted && m_watchList.contains(nickname))
-        if (m_server->getNickJoinedChannels(nickname).isEmpty()) m_ISONList_invalid = true;
+        if (m_server->getSharedChannels(nickname).isEmpty()) m_ISONList_invalid = true;
 }
 
 void ServerISON::slotChannelJoinedOrUnjoined(Server* /*server*/,

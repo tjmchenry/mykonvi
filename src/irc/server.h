@@ -290,7 +290,7 @@ class Server : public QObject
          *  @param nickname    The desired nickname.  Case insensitive.
          *  @return            A list of joined channels the nick is in.  Empty if none.
          */
-        QStringList getNickJoinedChannels(const QString& nickname);
+        QStringList getSharedChannels(const QString& nickname);
         /** Returns a list of all the channels (joined or unjoined) that a nick is in.
          *  @param nickname    The desired nickname.  Case insensitive.
          *  @return            A list of channels the nick is in.  Empty if none.
@@ -302,15 +302,6 @@ class Server : public QObject
         /** Returns a list of all the channels we're in that nickname is also in.
          *  @param nickname    The desired nickname.  Case insensitive.
          *  @return            A list of channels the nick is in that we're also in.  Empty if none.
-         */
-        QStringList getSharedChannels(const QString& nickname);
-        /** Returns pointer to the ChannelNick (mode and pointer to NickInfo) for a
-         *  given channel and nickname.
-         *  @param channelName The desired channel name.  Case insensitive.
-         *  @param nickname    The desired nickname.  Case insensitive.
-         *  @return            Pointer to ChannelNick structure containing a pointer
-         *                     to the NickInfo and the mode of the nick in the channel.
-         *                     0 if not found.
          */
         ChannelNickPtr getChannelNick(const QString& channelName, const QString& nickname);
         /** Updates a nickname in a channel.  If not on the joined or unjoined lists, and nick

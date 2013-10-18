@@ -55,6 +55,7 @@ class NickListModel : public QAbstractListModel
 
         bool isNickOnline(const QString& nick) const;
         bool isNickIdentified(const QString& nick) const;
+        QStringList getNickChannels(const QString& nick) const;
         bool isNickInChannel(const QString& nick, const QString& channel) const;
         bool isNickAnyTypeOfOp(const QString& nick, const QString& channel) const;
         QString getNickHostmask(const QString& nick) const;
@@ -65,7 +66,6 @@ class NickListModel : public QAbstractListModel
         void setAllChannelNicksMoreActive(const QString& channel);
         uint getNickTimestamp(const QString& nick, const QString& channel) const;
         uint getNickStatusValue(const QString& nick, const QString& channel) const;
-        QList<QString> getNickChannels(const QString& nick) const;
 
         void setNickMode(const QString& nick, const QString& channel, unsigned int mode);
         void setNickMode(const QString& nick, const QString& channel, char mode, bool state);

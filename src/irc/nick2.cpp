@@ -74,9 +74,9 @@ void Nick2::removeChannel(const QString& channel)
     m_channelHash.remove(channel);
 }
 
-QList<QString> Nick2::getChannels() const
+QStringList Nick2::getChannels() const
 {
-    return m_channelHash.keys();
+    return QStringList(m_channelHash.keys());
 }
 
 bool Nick2::isInChannel(const QString& channel) const

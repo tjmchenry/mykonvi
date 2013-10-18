@@ -1784,46 +1784,28 @@ ChannelNickPtr Server::setChannelNick(const QString& channelName, const QString&
     return channelNick;
 }
 
-// Returns a list of all the joined channels that a nick is in.
-QStringList Server::getNickJoinedChannels(const QString& nickname)
+// Returns a list of all the shared channels
+QStringList Server::getSharedChannels(const QString& nickname)
 {
-    QString lcNickname = nickname.toLower();
-    QStringList channellist;
-    ChannelMembershipMap::ConstIterator channel;
-    for( channel = m_joinedChannels.constBegin(); channel != m_joinedChannels.constEnd(); ++channel )
+    QStringList channelList = m_nickListModel2->getNickChannels(nickname);
+    QStringList ourChannelList = m_nickListModel2->getNickChannels(getNickname());
+
+    QStringList sharedChannelsList = QStringList();
+    QStringList::ConstIterator i;
+
+    for (i = ourChannelList.constBegin(); i != ourChannelList.constEnd(); ++i)
     {
-        if (channel.value()->contains(lcNickname)) channellist.append(channel.key());
+        if (channelList.contains(*i))
+            sharedChannelsList.append(*i);
     }
-    return channellist;
+
+    return sharedChannelsList;
 }
 
 // Returns a list of all the channels (joined or unjoined) that a nick is in.
 QStringList Server::getNickChannels(const QString& nickname)
 {
-    QString lcNickname = nickname.toLower();
-    QStringList channellist;
-    ChannelMembershipMap::ConstIterator channel;
-    for( channel = m_joinedChannels.constBegin(); channel != m_joinedChannels.constEnd(); ++channel )
-    {
-        if (channel.value()->contains(lcNickname)) channellist.append(channel.key());
-    }
-    for( channel = m_unjoinedChannels.constBegin(); channel != m_unjoinedChannels.constEnd(); ++channel )
-    {
-        if (channel.value()->contains(lcNickname)) channellist.append(channel.key());
-    }
-    return channellist;
-}
-
-QStringList Server::getSharedChannels(const QString& nickname)
-{
-    QString lcNickname = nickname.toLower();
-    QStringList channellist;
-    ChannelMembershipMap::ConstIterator channel;
-    for( channel = m_joinedChannels.constBegin(); channel != m_joinedChannels.constEnd(); ++channel )
-    {
-        if (channel.value()->contains(lcNickname)) channellist.append(channel.key());
-    }
-    return channellist;
+    return m_nickListModel2->getNickChannels(nickname);
 }
 
 bool Server::isNickOnline(const QString &nickname)

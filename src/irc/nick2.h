@@ -37,7 +37,7 @@ class Nick2 : public QObject
 
         void addChannel(const QString& channel);
         void removeChannel(const QString& channel);
-        QList<QString> getChannels() const;
+        QStringList getChannels() const;
         bool isInChannel(const QString& channel) const;
         bool isInAnyChannel() const;
 

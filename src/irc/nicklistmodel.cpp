@@ -321,6 +321,15 @@ bool NickListModel::isNickInChannel(const QString& nick, const QString& channel)
     return false;
 }
 
+bool NickListModel::isNickAnyTypeOfOp(const QString& nick, const QString& channel) const
+{
+    if (isNickOnline(nick) && isNickInChannel(nick, channel))
+        return m_nickHash.value(nick)->isAnyTypeOfOp(channel);
+
+    return false;
+}
+
+
 //hostmask
 QString NickListModel::getNickHostmask(const QString& nick) const
 {
@@ -482,7 +491,7 @@ ChannelNickListFilterModel::~ChannelNickListFilterModel()
 
 void ChannelNickListFilterModel::insertNick(Nick2* item)
 {
-    if (sourceNickModel()->isNickOnline(item->getNickname()))
+    if (sourceNickModel() && sourceNickModel()->isNickOnline(item->getNickname()))
     {
         sourceNickModel()->fastInsertNick(item);
 
@@ -492,12 +501,14 @@ void ChannelNickListFilterModel::insertNick(Nick2* item)
 
 void ChannelNickListFilterModel::removeNick(const QString& nick)
 {
-    sourceNickModel()->removeNickFromChannel(nick, m_channelName);
+    if (sourceNickModel())
+        sourceNickModel()->removeNickFromChannel(nick, m_channelName);
 }
 
 void ChannelNickListFilterModel::removeAllNicks()
 {
-    sourceNickModel()->removeAllNicksFromChannel(m_channelName);
+    if (sourceNickModel())
+        sourceNickModel()->removeAllNicksFromChannel(m_channelName);
 }
 
 NickListModel* ChannelNickListFilterModel::sourceNickModel() const
@@ -527,7 +538,18 @@ QVariant ChannelNickListFilterModel::data(const QModelIndex& index, int role) co
 
 bool ChannelNickListFilterModel::isNickInChannel(const QString& nick) const
 {
-    return sourceNickModel()->isNickInChannel(nick, m_channelName);
+    if (sourceNickModel())
+        return sourceNickModel()->isNickInChannel(nick, m_channelName);
+
+    return false;
+}
+
+bool ChannelNickListFilterModel::isNickAnyTypeOfOp(const QString& nick) const
+{
+    if (sourceNickModel())
+        return sourceNickModel()->isNickAnyTypeOfOp(nick, m_channelName);
+
+    return false;
 }
 
 void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
@@ -780,11 +802,14 @@ void ChannelNickListFilterModel::endNickCompletion()
 
 bool ChannelNickListFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
 {
-    QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
-    Nick2* nick = static_cast<Nick2*>(index.internalPointer());
+    if (sourceNickModel())
+    {
+        QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
+        Nick2* nick = static_cast<Nick2*>(index.internalPointer());
 
-    if (nick)
-        return nick->isInChannel(m_channelName);
+        if (nick)
+            return nick->isInChannel(m_channelName);
+    }
 
     return false;
 }

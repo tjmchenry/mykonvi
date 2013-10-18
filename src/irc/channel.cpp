@@ -2046,11 +2046,12 @@ void Channel::childAdjustFocus()
 
 void Channel::refreshModeButtons()
 {
+    QString nick = m_server->getNickname();
     bool enable = true;
-    if(getOwnChannelNick())
-    {
-        enable=getOwnChannelNick()->isAnyTypeOfOp();
-    } // if not channel nick, then enable is true - fall back to assuming they are op
+    if (m_channelNickListModel->isNickInChannel(nick))
+        enable = m_channelNickListModel->isNickAnyTypeOfOp(nick);
+
+    // if not channel nick, then enable is true - fall back to assuming they are op
 
     //don't disable the mode buttons since you can't then tell if they are enabled or not.
     //needs to be fixed somehow

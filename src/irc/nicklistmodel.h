@@ -56,6 +56,7 @@ class NickListModel : public QAbstractListModel
         bool isNickOnline(const QString& nick) const;
         bool isNickIdentified(const QString& nick) const;
         bool isNickInChannel(const QString& nick, const QString& channel) const;
+        bool isNickAnyTypeOfOp(const QString& nick, const QString& channel) const;
         QString getNickHostmask(const QString& nick) const;
         void setNickHostmask(const QString& nick, const QString& hostmask);
         void setNewNickname(const QString& nick, const QString& newNick);
@@ -110,6 +111,8 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
         bool nickHostmaskLessThan(const Nick2* left, const Nick2* right) const;
         bool nickStatusLessThan(const Nick2* left, const Nick2* right) const;
         bool nickActivityLessThan(const Nick2* left, const Nick2* right) const;
+
+        bool isNickAnyTypeOfOp(const QString& nick) const;
 
     public slots:
         void nickCompletion(IRCInput* inputBar);

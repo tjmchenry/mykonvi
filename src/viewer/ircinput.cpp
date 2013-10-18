@@ -296,7 +296,7 @@ void IRCInput::keyPressEvent(QKeyEvent* e)
     switch(e->key())
     {
         case Qt::Key_Tab:
-            emit nickCompletion();
+            emit nickCompletion(this);
             return;
             break;
 

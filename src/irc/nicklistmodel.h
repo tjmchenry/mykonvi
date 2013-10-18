@@ -113,6 +113,7 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
 
     public slots:
         void nickCompletion(IRCInput* inputBar);
+        void endNickCompletion();
 
     protected:
         bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const;

@@ -47,7 +47,7 @@ class IRCInput : public KTextEdit
         virtual void createHighlighter();
 
     signals:
-        void nickCompletion();
+        void nickCompletion(IRCInput* input);
         void endCompletion();                     // tell channel that completion phase is over
         void textPasted(const QString& text);
         void submit();

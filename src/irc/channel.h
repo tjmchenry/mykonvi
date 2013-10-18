@@ -65,9 +65,6 @@ class NickList : public QList<Nick*>
     public:
         NickList();
 
-        QString completeNick(const QString& pattern, bool& complete, QStringList& found,
-                             bool skipNonAlfaNum, bool caseSensitive);
-
         bool containsNick(const QString& nickname);
 
 };
@@ -262,8 +259,6 @@ class Channel : public ChatWindow
         void connectionStateChanged(Server*, Konversation::ConnectionState);
 
     protected slots:
-        void completeNick(); ///< I guess this is a GUI function, might be nice to have at DCOP level though --argonel
-        void endCompleteNick();
         void quickButtonClicked(const QString& definition);
         void modeButtonClicked(int id,bool on);
         void channelLimitChanged();

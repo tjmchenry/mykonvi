@@ -770,6 +770,14 @@ QString ChannelNickListFilterModel::completeNick(const QString& pattern, bool& c
     return QString();
 }
 
+void ChannelNickListFilterModel::endNickCompletion()
+{
+    if (m_completionPosition)
+        m_completionPosition--;
+    else
+        m_completionPosition = rowCount() - 1;
+}
+
 bool ChannelNickListFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
 {
     QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);

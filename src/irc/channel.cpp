@@ -268,7 +268,6 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
 
     connect(m_inputBar,SIGNAL (submit()),this,SLOT (channelTextEntered()) );
     connect(m_inputBar,SIGNAL (envelopeCommand()),this,SLOT (channelPassthroughCommand()) );
-    connect(m_inputBar, SIGNAL(nickCompletion(IRCInput*)), m_channelNickListModel, SLOT(nickCompletion(IRCInput*)));
     connect(m_inputBar, SIGNAL(endCompletion()), m_channelNickListModel, SLOT(endNickCompletion()));
     connect(m_inputBar,SIGNAL (textPasted(QString)),this,SLOT (textPasted(QString)) );
 
@@ -335,6 +334,8 @@ void Channel::setServer(Server* server)
     m_channelNickListModel->setSourceModel(m_server->nickListModel2());
     m_nicknameAllListView->setModel(m_server->nickListModel2());
 
+    connect(m_inputBar, SIGNAL(nickCompletion(IRCInput*)), m_channelNickListModel, SLOT(nickCompletion(IRCInput*)));
+    connect(Application::instance(), SIGNAL(appearanceChanged()), m_channelNickListModel, SLOT(invalidate()));
     connect(awayLabel, SIGNAL(unaway()), m_server, SLOT(requestUnaway()));
     connect(awayLabel, SIGNAL(awayMessageChanged(QString)), m_server, SLOT(requestAway(QString)));
 }
@@ -1995,6 +1996,7 @@ void Channel::updateAppearance()
         m_delayedSortTrigger = DELAYED_SORT_TRIGGER + 1;
         m_delayedSortTimer->start(500 + qrand()/2000);
     }
+
 
     ChatWindow::updateAppearance();
 }

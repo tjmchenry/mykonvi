@@ -820,7 +820,7 @@ bool ChannelNickListFilterModel::nickTimestampLessThan(const Nick2* left, const 
     int difference = left->getTimestamp(m_channelName) - right->getTimestamp(m_channelName);
 
     if (difference != 0)
-        return (difference < 0);
+        return (difference < 0) ? false : true;
 
     if (Preferences::self()->sortByStatus())
         return nickStatusLessThan(left, right);
@@ -861,7 +861,7 @@ bool ChannelNickListFilterModel::nickActivityLessThan(const Nick2* left, const N
     int difference = left->getRecentActivity(m_channelName) - right->getRecentActivity(m_channelName);
 
     if (difference != 0)
-        return (difference < 0);
+        return (difference < 0) ? false : true;
 
     return nickTimestampLessThan(left, right);
 }
@@ -871,7 +871,7 @@ bool ChannelNickListFilterModel::nickStatusLessThan(const Nick2* left, const Nic
     int difference = left->getStatusValue(m_channelName) - right->getStatusValue(m_channelName);
 
     if (difference != 0)
-        return (difference < 0);
+        return (difference < 0) ? false : true;
 
     return nickLessThan(left, right);
 }

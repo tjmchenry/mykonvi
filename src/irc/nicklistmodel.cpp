@@ -21,10 +21,6 @@ NickListModel::NickListModel(Server* server) : QAbstractListModel(server)
     m_server = server;
     m_hostmask = false;
 
-    m_delayedResetTimer = new QTimer(this);
-    m_delayedResetTimer->setSingleShot(true);
-    m_delayedResetTimer->setInterval(100);
-
     Images* images = Application::instance()->images();
 
     updateMinimumRowHeight();
@@ -60,39 +56,25 @@ NickListModel::NickListModel(Server* server) : QAbstractListModel(server)
 
         m_icon = images->getNickIcon(Images::Normal, false);
     }
-
-    connect(m_delayedResetTimer, SIGNAL(timeout()), this, SLOT(slotReset()));
 }
 
 NickListModel::~NickListModel()
 {
 }
 
-void NickListModel::slotReset()
-{
-    reset();
-}
-
 void NickListModel::clear()
 {
     m_nickHash.clear();
-}
-
-void NickListModel::insertNick(Nick2* item)
-{
-    m_nickHash.insert(item->getNickname(), item);
-    m_delayedResetTimer->start();
+    m_nickList.clear();
 }
 
 /* insert without resetting the model */
-//TODO broken
-void NickListModel::fastInsertNick(Nick2* item)
+void NickListModel::insertNick(Nick2* item)
 {
-    m_nickHash.insert(item->getNickname(), item);
-
-    uint position = getHashPosition(item->getNickname());
-
+    uint position = m_nickList.count();
     beginInsertRows(QModelIndex(), position, position);
+    m_nickList.append(item);
+    m_nickHash.insert(item->getNickname(), item);
     endInsertRows();
 }
 
@@ -106,7 +88,7 @@ void NickListModel::addNickToChannel(const QString& nick, const QString& channel
 
     m_nickHash[nick]->addChannel(channel);
 
-    uint position = getHashPosition(nick);
+    uint position = m_nickList.indexOf(m_nickHash[nick]);
     QModelIndex index = NickListModel::index(position, 0);
     emit dataChanged(index, index); //changes tooltips in existing channels, and all roles in new channel
 }
@@ -115,13 +97,11 @@ void NickListModel::removeNick(const QString& nick)
 {
     if (isNickOnline(nick))
     {
-        uint position = getHashPosition(nick);
-        QHash<QString, Nick2*>::iterator i = m_nickHash.find(nick);
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
 
         beginRemoveRows(QModelIndex(), position, position);
-
-        m_nickHash.erase(i);
-
+        m_nickHash.remove(nick);
+        m_nickList.removeAt(position);
         endRemoveRows();
     }
 }
@@ -138,7 +118,7 @@ void NickListModel::removeNickFromChannel(const QString& nick, const QString& ch
         }
         else
         {
-            uint position = getHashPosition(nick);
+            uint position = m_nickList.indexOf(m_nickHash[nick]);
             QModelIndex index = NickListModel::index(position, 0);
             emit dataChanged(index, index); //changes tooltips in existing channels, and all roles in removed channel
         }
@@ -150,42 +130,16 @@ void NickListModel::removeAllNicksFromChannel(const QString& channel)
     kDebug() << "In remove all nicks from channel";
     if (!m_nickHash.isEmpty())
     {
-        QHash<QString, Nick2*>::iterator i = m_nickHash.begin();
-        uint position = 0;
+        QHash<QString, Nick2*>::const_iterator i;
 
-        while (i != m_nickHash.end())
+        for (i = m_nickHash.constBegin(); i != m_nickHash.constEnd(); ++i)
         {
-            i.value()->removeChannel(channel);
+            removeNickFromChannel(i.key(), channel);
 
-            if (!i.value()->isInAnyChannel())
-            {
-                beginRemoveRows(QModelIndex(), position, position);
-                i = m_nickHash.erase(i);
-                endRemoveRows();
-            }
-            else
-                ++i;
-
-            position++;
+            if (m_nickHash.isEmpty())
+                break;
         }
-
-        m_delayedResetTimer->start();
     }
-}
-
-uint NickListModel::getHashPosition(const QString& nick) const
-{
-    QHash<QString, Nick2*>::const_iterator i = m_nickHash.find(nick);
-
-    uint position = 0;
-
-    while (i != m_nickHash.constBegin()) 
-    {
-        ++position;
-        --i;
-    }
-
-    return position;
 }
 
 QModelIndex NickListModel::index(int row, int column, const QModelIndex& /* parent */) const
@@ -193,17 +147,10 @@ QModelIndex NickListModel::index(int row, int column, const QModelIndex& /* pare
     if (row < 0 || column < 0)
         return QModelIndex();
 
-    if (rowCount() <= row || columnCount() <= column)
+    if (row >= rowCount() || column >= columnCount())
         return QModelIndex();
 
-    // This will be okay as long as the data in the hash is not changed
-    // If it is, all of the data is invalid and all of these need to be
-    // recalculated. Since the model would -also- need to be recalculated
-    // there should not be any problems.
-
-    QHash<QString, Nick2*>::const_iterator i = m_nickHash.constBegin() + row;
-
-    return createIndex(row, column, m_nickHash.value(i.key()));
+    return createIndex(row, column, m_nickList.at(row));
 }
 
 QVariant NickListModel::headerData(int section, Qt::Orientation orientation, int role) const
@@ -224,12 +171,12 @@ int NickListModel::columnCount(const QModelIndex& /*parent*/) const
 
 int NickListModel::rowCount(const QModelIndex& /*parent*/) const
 {
-    return m_nickHash.count();
+    return m_nickList.count();
 }
 
 QVariant NickListModel::data(const QModelIndex& index, int role) const
 {
-    if (!index.isValid() || index.row() >= m_nickHash.count ())
+    if (!index.isValid() || index.row() >= m_nickList.count())
         return QVariant();
 
     Nick2* item = static_cast<Nick2*>(index.internalPointer());
@@ -345,7 +292,7 @@ void NickListModel::setNickHostmask(const QString& nick, const QString& hostmask
     {
         m_nickHash[nick]->setHostmask(hostmask);
 
-        uint position = getHashPosition(nick);
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
         QModelIndex index = NickListModel::index(position, 0);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
@@ -359,10 +306,11 @@ void NickListModel::setNewNickname(const QString& nick, const QString& newNick)
     {
         m_nickHash[nick]->setNickname(newNick);
         m_nickHash[newNick] = m_nickHash[nick];
-        m_nickHash.remove(nick);
 
-        uint position = getHashPosition(nick);
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
         QModelIndex index = NickListModel::index(position, 0);
+
+        m_nickHash.remove(nick);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
@@ -384,7 +332,7 @@ void NickListModel::setNickMoreActive(const QString& nick, const QString& channe
     {
         m_nickHash[nick]->moreActive(channel);
 
-        uint position = getHashPosition(nick);
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
         QModelIndex index = NickListModel::index(position, 0);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
@@ -392,7 +340,7 @@ void NickListModel::setNickMoreActive(const QString& nick, const QString& channe
     }
 }
 
-void NickListModel::setAllChannelNicksMoreActive(const QString& channel)
+void NickListModel::setAllChannelNicksLessActive(const QString& channel)
 {
     if (!m_nickHash.isEmpty())
     {
@@ -403,7 +351,8 @@ void NickListModel::setAllChannelNicksMoreActive(const QString& channel)
         {
             if (isNickInChannel(i.key(), channel))
             {
-                QModelIndex index = NickListModel::index(position, 0);
+                i.value()->lessActive(channel);
+                QModelIndex index = NickListModel::index(m_nickList.indexOf(i.value()), 0);
 
                 emit dataChanged(index, index);
             }
@@ -437,7 +386,7 @@ void NickListModel::setNickMode(const QString& nick, const QString& channel, uns
     {
         m_nickHash[nick]->setMode(channel, mode);
 
-        uint position = getHashPosition(nick);
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
         QModelIndex index = NickListModel::index(position, 0);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
@@ -451,7 +400,7 @@ void NickListModel::setNickMode(const QString& nick, const QString& channel, cha
     {
         m_nickHash[nick]->setMode(channel, mode, state);
 
-        uint position = getHashPosition(nick);
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
         QModelIndex index = NickListModel::index(position, 0);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
@@ -466,7 +415,7 @@ void NickListModel::setNickAway(const QString& nick, bool away)
     {
         m_nickHash[nick]->setAway(away);
 
-        uint position = getHashPosition(nick);
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
         QModelIndex index = NickListModel::index(position, 0);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
@@ -514,7 +463,7 @@ void ChannelNickListFilterModel::insertNick(Nick2* item)
 {
     if (sourceNickModel() && sourceNickModel()->isNickOnline(item->getNickname()))
     {
-        sourceNickModel()->fastInsertNick(item);
+        sourceNickModel()->insertNick(item);
 
         sourceNickModel()->addNickToChannel(item->getNickname(), m_channelName);
     }
@@ -535,7 +484,7 @@ void ChannelNickListFilterModel::removeAllNicks()
 void ChannelNickListFilterModel::setAllNicksLessActive()
 {
     if (sourceNickModel())
-        sourceNickModel()->setAllChannelNicksMoreActive(m_channelName);
+        sourceNickModel()->setAllChannelNicksLessActive(m_channelName);
 }
 
 NickListModel* ChannelNickListFilterModel::sourceNickModel() const

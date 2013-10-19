@@ -231,7 +231,7 @@ class NicksOnline : public ChatWindow
         QTreeWidget* m_nickListView;
         // Context menu when right-clicking a nick.
         KMenu* m_popupMenu;
-        KToolBar *m_toolBar;
+        KToolBar* m_toolBar;
         // A string containing the identifier for the "Offline" listview item
         QString c_offline;
         // Timer for refreshing display and generating WHOISes.

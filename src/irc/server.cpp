@@ -3213,6 +3213,8 @@ void Server::renameNickInfo(NickInfoPtr nickInfo, const QString& newname)
 {
     if (nickInfo)
     {
+        m_nickListModel2->setNewNickname(nickInfo->getNickname(), newname);
+        QStringList nickChannels = getNickChannels(newname);
         // Get existing lowercase nickname and rename nickname in the NickInfo object.
         QString lcNickname(nickInfo->loweredNickname());
         nickInfo->setNickname(newname);
@@ -3221,7 +3223,6 @@ void Server::renameNickInfo(NickInfoPtr nickInfo, const QString& newname)
         m_allNicks.remove(lcNickname);
         m_allNicks.insert(lcNewname, nickInfo);
         // Rename key in the joined and unjoined lists.
-        QStringList nickChannels = getNickChannels(lcNickname);
         QStringList::iterator itEnd = nickChannels.end();
 
         for(QStringList::iterator it = nickChannels.begin(); it != itEnd; ++it)
@@ -3245,8 +3246,6 @@ void Server::renameNickInfo(NickInfoPtr nickInfo, const QString& newname)
     {
         kDebug() << "was called for newname='" << newname << "' but nickInfo is null";
     }
-
-    m_nickListModel2->setNewNickname(nickInfo->getNickname(), newname);
 }
 
 Channel* Server::nickJoinsChannel(const QString &channelName, const QString &nickname, const QString &hostmask)

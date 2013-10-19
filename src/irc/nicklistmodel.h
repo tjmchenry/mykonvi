@@ -35,7 +35,6 @@ class NickListModel : public QAbstractListModel
 
         void clear();
         void insertNick(Nick2* item);
-        void fastInsertNick(Nick2* item);
         void addNickToChannel(const QString& nick, const QString& channel);
 
         void removeNick(const QString& nick);
@@ -63,7 +62,7 @@ class NickListModel : public QAbstractListModel
         void setNewNickname(const QString& nick, const QString& newNick);
         uint getNickActivity(const QString& nick, const QString& channel) const;
         void setNickMoreActive(const QString& nick, const QString& channel);
-        void setAllChannelNicksMoreActive(const QString& channel);
+        void setAllChannelNicksLessActive(const QString& channel);
         uint getNickTimestamp(const QString& nick, const QString& channel) const;
         uint getNickStatusValue(const QString& nick, const QString& channel) const;
 
@@ -73,11 +72,8 @@ class NickListModel : public QAbstractListModel
 
         void setHostmaskColumn(bool hostmask) { m_hostmask = hostmask; }
 
-    public slots:
-        void slotReset();
-
-
     private:
+        QList<Nick2*> m_nickList;
         QHash<QString, Nick2*> m_nickHash;
         Server* m_server;
         bool m_hostmask;

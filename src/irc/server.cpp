@@ -3213,7 +3213,6 @@ void Server::renameNickInfo(NickInfoPtr nickInfo, const QString& newname)
 {
     if (nickInfo)
     {
-        m_nickListModel2->setNewNickname(nickInfo->getNickname(), newname);
         QStringList nickChannels = getNickChannels(newname);
         // Get existing lowercase nickname and rename nickname in the NickInfo object.
         QString lcNickname(nickInfo->loweredNickname());

@@ -75,7 +75,7 @@ class Nick2 : public QObject
         QString getBestPersonName() const;
 
         bool isAway() const;
-        void setAway(bool away);
+        void setAway(bool away, const QString& awayMessage = QString());
         QString getAwayMessage() const;
         void setAwayMessage(const QString&);
         QDateTime getOnlineSince() const;

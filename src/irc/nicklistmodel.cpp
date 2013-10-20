@@ -300,6 +300,20 @@ void NickListModel::setNickHostmask(const QString& nick, const QString& hostmask
     }
 }
 
+void NickListModel::setNickRealName(const QString& nick, const QString& realName)
+{
+    if (!realName.isEmpty() && isNickOnline(nick))
+    {
+        m_nickHash[nick]->setRealName(realName);
+
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
+        QModelIndex index = NickListModel::index(position, 0);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
+    }
+}
+
 void NickListModel::setNewNickname(const QString& nick, const QString& newNick)
 {
     if (isNickOnline(nick) && !newNick.isEmpty())
@@ -408,12 +422,11 @@ void NickListModel::setNickMode(const QString& nick, const QString& channel, cha
     }
 }
 
-void NickListModel::setNickAway(const QString& nick, bool away)
+void NickListModel::setNickAway(const QString& nick, bool away, const QString& awayMessage)
 {
-    kDebug() << "Setting Nick Away for: " << nick;
     if (isNickOnline(nick))
     {
-        m_nickHash[nick]->setAway(away);
+        m_nickHash[nick]->setAway(away, awayMessage);
 
         uint position = m_nickList.indexOf(m_nickHash[nick]);
         QModelIndex index = NickListModel::index(position, 0);

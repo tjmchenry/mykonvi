@@ -41,8 +41,6 @@ class NickListModel : public QAbstractListModel
         void removeNickFromChannel(const QString& nick, const QString& channel);
         void removeAllNicksFromChannel(const QString& channel);
 
-        uint getHashPosition(const QString& nick) const;
-
         int columnCount(const QModelIndex& parent = QModelIndex()) const;
         int rowCount(const QModelIndex& parent = QModelIndex()) const;
         QModelIndex index(int row, int column, const QModelIndex& parent = QModelIndex()) const;
@@ -59,6 +57,7 @@ class NickListModel : public QAbstractListModel
         bool isNickAnyTypeOfOp(const QString& nick, const QString& channel) const;
         QString getNickHostmask(const QString& nick) const;
         void setNickHostmask(const QString& nick, const QString& hostmask);
+        void setNickRealName(const QString& nick, const QString& realName);
         void setNewNickname(const QString& nick, const QString& newNick);
         uint getNickActivity(const QString& nick, const QString& channel) const;
         void setNickMoreActive(const QString& nick, const QString& channel);
@@ -68,7 +67,7 @@ class NickListModel : public QAbstractListModel
 
         void setNickMode(const QString& nick, const QString& channel, unsigned int mode);
         void setNickMode(const QString& nick, const QString& channel, char mode, bool state);
-        void setNickAway(const QString& nick, bool away);
+        void setNickAway(const QString& nick, bool away, const QString& awayMessage = QString());
 
         void setHostmaskColumn(bool hostmask) { m_hostmask = hostmask; }
 

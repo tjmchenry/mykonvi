@@ -553,10 +553,16 @@ void Nick2::setNickname(const QString& newNickname)
     emit nickChanged(getNickname());
 }
 
-void Nick2::setAway(bool state)
+void Nick2::setAway(bool state, const QString& awayMessage)
 {
-    if (m_away == state) return;
+    if (m_away == state && m_awayMessage == awayMessage)
+        return;
+
+    if ((!m_awayMessage.isEmpty() && m_away) || (m_awayMessage.isEmpty() && !m_away))
+        m_awayMessage = awayMessage;
+
     m_away = state;
+
 
     emit channelPropertiesChanged(QString());
     emit nickChanged(getNickname());

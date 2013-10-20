@@ -1403,6 +1403,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(3))
                 {
+                    m_server->nickListModel2()->setNickAway(parameterList.value(1), true, trailing);
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
                     if (nickInfo)
                     {
@@ -1540,6 +1541,11 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(5));
                                                     // G=away G@=away,op G+=away,voice
                     bool bAway = parameterList.value(6).toUpper().startsWith('G');
+
+                    m_server->nickListModel2()->setNickAway(parameterList.value(5), bAway);
+                    m_server->nickListModel2()->setNickHostmask(parameterList.value(5), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
+                    m_server->nickListModel2()->setNickRealName(parameterList.value(5), trailing.section(' ', 1));
+
                     if (nickInfo)
                     {
                         nickInfo->setHostmask(i18n("%1@%2", parameterList.value(2), parameterList.value(3)));

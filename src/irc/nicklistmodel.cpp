@@ -436,6 +436,20 @@ void NickListModel::setNickAway(const QString& nick, bool away, const QString& a
     }
 }
 
+void NickListModel::setNickIdentified(const QString& nick, bool identified)
+{
+    if (isNickOnline(nick))
+    {
+        m_nickHash[nick]->setIdentified(identified);
+
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
+        QModelIndex index = NickListModel::index(position, 0);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DecorationRole << Qt::DisplayRole);
+    }
+}
+
 struct timestampLessThanSort
 {
     ChannelNickListFilterModel* This;

@@ -1223,6 +1223,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
+                    m_server->nickListModel2()->setNickIdentified(parameterList.value(1), true);
+
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
@@ -1507,6 +1509,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 if (plHas(2))
                 {
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
+                    m_server->nickListModel2()->setNickIdentified(parameterList.value(1), true);
+
                     if (nickInfo)
                     {
                         nickInfo->setIdentified(true);
@@ -2173,6 +2177,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 {
                     m_server->appendStatusMessage(i18n("Info"), i18n("SASL authentication successful."));
                     m_server->capEndNegotiation();
+                    m_server->nickListModel2()->setNickIdentified(m_server->getNickname(), true);
 
                     NickInfoPtr nickInfo = m_server->getNickInfo(m_server->getNickname());
                     if (nickInfo) nickInfo->setIdentified(true);

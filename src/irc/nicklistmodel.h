@@ -68,6 +68,7 @@ class NickListModel : public QAbstractListModel
         void setNickMode(const QString& nick, const QString& channel, unsigned int mode);
         void setNickMode(const QString& nick, const QString& channel, char mode, bool state);
         void setNickAway(const QString& nick, bool away, const QString& awayMessage = QString());
+        void setNickIdentified(const QString& nick, bool identified);
 
         void setHostmaskColumn(bool hostmask) { m_hostmask = hostmask; }
 

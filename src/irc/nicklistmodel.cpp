@@ -127,17 +127,29 @@ void NickListModel::removeNickFromChannel(const QString& nick, const QString& ch
 
 void NickListModel::removeAllNicksFromChannel(const QString& channel)
 {
-    kDebug() << "In remove all nicks from channel";
     if (!m_nickHash.isEmpty())
     {
-        QHash<QString, Nick2*>::const_iterator i;
+        QHash<QString, Nick2*>::iterator i = m_nickHash.begin();
 
-        for (i = m_nickHash.constBegin(); i != m_nickHash.constEnd(); ++i)
+        while (i != m_nickHash.end())
         {
-            removeNickFromChannel(i.key(), channel);
+            i.value()->removeChannel(channel);
 
-            if (m_nickHash.isEmpty())
-                break;
+            uint position = m_nickList.indexOf(i.value());
+            if (!i.value()->isInAnyChannel())
+            {
+                beginRemoveRows(QModelIndex(), position, position);
+                i = m_nickHash.erase(i);
+                m_nickList.removeAt(position);
+                endRemoveRows();
+            }
+            else
+            {
+                QModelIndex index = NickListModel::index(position, 0);
+                emit dataChanged(index, index); //changes tooltips in existing channels, and all roles in removed channel
+
+                ++i;
+            }
         }
     }
 }

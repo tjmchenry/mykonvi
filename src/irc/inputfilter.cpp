@@ -245,6 +245,8 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
                 // Check if we ignore queries from this nick
                 if (!isIgnore(prefix, Ignore::Query))
                 {
+                    m_server->nickListModel2()->setNickHostmask(sourceNick, sourceHostmask);
+
                     NickInfoPtr nickinfo = m_server->obtainNickInfo(sourceNick);
                     nickinfo->setHostmask(sourceHostmask);
 
@@ -1406,6 +1408,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 if (plHas(3))
                 {
                     m_server->nickListModel2()->setNickAway(parameterList.value(1), true, trailing);
+
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
                     if (nickInfo)
                     {
@@ -1450,6 +1453,9 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(4))
                 {
+                    m_server->nickListModel2()->setNickHostmask(parameterList.value(1), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
+                    m_server->nickListModel2()->setNickRealName(parameterList.value(1), trailing);
+
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
                     if (nickInfo)
                     {
@@ -1508,8 +1514,9 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
-                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
                     m_server->nickListModel2()->setNickIdentified(parameterList.value(1), true);
+
+                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
 
                     if (nickInfo)
                     {
@@ -1726,6 +1733,10 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(4))
                 {
+                    m_server->nickListModel2()->setNickNetServer(parameterList.value(1), parameterList.value(2));
+                    m_server->nickListModel2()->setNickNetServerInfo(parameterList.value(1), trailing);
+                    m_server->nickListModel2()->setNickAway(parameterList.value(1), false);
+
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
                     if (nickInfo)
                     {
@@ -1798,6 +1809,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
 
                     if (!signonTime.isNull())
                     {
+                        m_server->nickListModel2()->setNickOnlineSince(parameterList.value(1), signonTime);
                         NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
 
                         if (nickInfo)
@@ -1974,6 +1986,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(1))
                 {
+                    m_server->nickListModel2()->setNickAway(parameterList.value(0), true);
+
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(0));
                     if (nickInfo)
                     {
@@ -1988,6 +2002,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(1))
                 {
+                    m_server->nickListModel2()->setNickAway(parameterList.value(0), false);
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(0));
 
                     if (nickInfo)
@@ -2407,6 +2422,8 @@ void InputFilter::parsePrivMsg(const QString& prefix, QStringList& parameterList
     {
         if(!isIgnore(prefix,Ignore::Query))
         {
+            m_server->nickListModel2()->setNickHostmask(source, sourceHostmask);
+
             NickInfoPtr nickinfo = m_server->obtainNickInfo(source);
             nickinfo->setHostmask(sourceHostmask);
 

@@ -59,6 +59,9 @@ class NickListModel : public QAbstractListModel
         void setNickHostmask(const QString& nick, const QString& hostmask);
         void setNickRealName(const QString& nick, const QString& realName);
         void setNewNickname(const QString& nick, const QString& newNick);
+        void setNickOnlineSince(const QString& nick, const QDateTime& onlineSince);
+        void setNickNetServer(const QString& nick, const QString& netServer);
+        void setNickNetServerInfo(const QString& nick, const QString& netServerInfo);
         uint getNickActivity(const QString& nick, const QString& channel) const;
         void setNickMoreActive(const QString& nick, const QString& channel);
         void setAllChannelNicksLessActive(const QString& channel);

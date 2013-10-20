@@ -331,6 +331,48 @@ void NickListModel::setNewNickname(const QString& nick, const QString& newNick)
     }
 }
 
+void NickListModel::setNickOnlineSince(const QString& nick, const QDateTime& onlineSince)
+{
+    if (isNickOnline(nick))
+    {
+        m_nickHash[nick]->setOnlineSince(onlineSince);
+
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
+        QModelIndex index = NickListModel::index(position, 0);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
+    }
+}
+
+void NickListModel::setNickNetServer(const QString& nick, const QString& netServer)
+{
+    if (isNickOnline(nick))
+    {
+        m_nickHash[nick]->setNetServer(netServer);
+
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
+        QModelIndex index = NickListModel::index(position, 0);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
+    }
+}
+
+void NickListModel::setNickNetServerInfo(const QString& nick, const QString& netServerInfo)
+{
+    if (isNickOnline(nick))
+    {
+        m_nickHash[nick]->setNetServerInfo(netServerInfo);
+
+        uint position = m_nickList.indexOf(m_nickHash[nick]);
+        QModelIndex index = NickListModel::index(position, 0);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
+    }
+}
+
 //activity
 uint NickListModel::getNickActivity(const QString& nick, const QString& channel) const
 {
@@ -446,7 +488,7 @@ void NickListModel::setNickIdentified(const QString& nick, bool identified)
         QModelIndex index = NickListModel::index(position, 0);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
-        emit dataChanged(index, index); //, QVector<int>() << Qt::DecorationRole << Qt::DisplayRole);
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
     }
 }
 

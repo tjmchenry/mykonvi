@@ -31,7 +31,7 @@ class Nick2 : public QObject
     Q_OBJECT
 
     public:
-        Nick2(const QString& nick, Server* server);
+        Nick2(int connectionId, const QString& nick);
         Nick2(const Nick2&);
         ~Nick2();
 
@@ -95,7 +95,7 @@ class Nick2 : public QObject
         void moreActive(const QString& channel);
         uint getRecentActivity(const QString& channel) const;
 
-        Server* getServer() const;
+        int getConnectionId() const;
         QString getNetServer() const;
         void setNetServer(const QString& netServer);
         QString getNetServerInfo() const;
@@ -123,7 +123,7 @@ class Nick2 : public QObject
         QString m_netServer;
         QString m_netServerInfo;
         QDateTime m_onlineSince;
-        Server* m_owningServer;
+        int m_connectionId;
         bool m_identified;
         bool m_printedOnline;
         int m_nickColor;
@@ -131,5 +131,3 @@ class Nick2 : public QObject
         QString m_awayMessage;
 };
 #endif
-
-

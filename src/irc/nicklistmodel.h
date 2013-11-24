@@ -23,6 +23,10 @@
 class Nick2;
 class Channel;
 
+typedef QHash<QString, Nick2*> NickHash;
+
+Q_DECLARE_METATYPE(NickHash);
+
 enum Roles {NickRole = Qt::UserRole, HostmaskRole};
 
 class NickListModel : public QAbstractListModel
@@ -30,55 +34,64 @@ class NickListModel : public QAbstractListModel
     Q_OBJECT
 
     public:
-        explicit NickListModel(Server* server);
+        explicit NickListModel(QObject *parent = 0);
         ~NickListModel();
 
         void clear();
-        void insertNick(Nick2* item);
-        void addNickToChannel(const QString& nick, const QString& channel);
 
-        void removeNick(const QString& nick);
-        void removeNickFromChannel(const QString& nick, const QString& channel);
-        void removeAllNicksFromChannel(const QString& channel);
+        void addServer(int connectionId);
+        void removeServer(int connectionId);
+
+        void insertNick(int connectionId, Nick2* item);
+        void addNickToChannel(int connectionId, const QString& channel, const QString& nick);
+
+        void removeNick(int connectionId, const QString& nick);
+        void removeNickFromChannel(int connectionId, const QString& channel, const QString& nick);
+        void removeAllNicksFromChannel(int connectionId, const QString& channel);
 
         int columnCount(const QModelIndex& parent = QModelIndex()) const;
         int rowCount(const QModelIndex& parent = QModelIndex()) const;
+        QPersistentModelIndex serverIndex(int connectionId);
         QModelIndex index(int row, int column, const QModelIndex& parent = QModelIndex()) const;
+        QModelIndex parent(const QModelIndex& index) const;
 
         QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
         QVariant headerData (int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const;
 
+        Qt::ItemFlags flags(const QModelIndex& index) const;
         QHash<int, QByteArray> roleNames() const;
+        bool hasChildren(const QModelIndex& index) const;
 
-        bool isNickOnline(const QString& nick) const;
-        bool isNickIdentified(const QString& nick) const;
-        QStringList getNickChannels(const QString& nick) const;
-        bool isNickInChannel(const QString& nick, const QString& channel) const;
-        bool isNickAnyTypeOfOp(const QString& nick, const QString& channel) const;
-        QString getNickHostmask(const QString& nick) const;
-        void setNickHostmask(const QString& nick, const QString& hostmask);
-        void setNickRealName(const QString& nick, const QString& realName);
-        void setNewNickname(const QString& nick, const QString& newNick);
-        void setNickOnlineSince(const QString& nick, const QDateTime& onlineSince);
-        void setNickNetServer(const QString& nick, const QString& netServer);
-        void setNickNetServerInfo(const QString& nick, const QString& netServerInfo);
-        uint getNickActivity(const QString& nick, const QString& channel) const;
-        void setNickMoreActive(const QString& nick, const QString& channel);
-        void setAllChannelNicksLessActive(const QString& channel);
-        uint getNickTimestamp(const QString& nick, const QString& channel) const;
-        uint getNickStatusValue(const QString& nick, const QString& channel) const;
+        bool isNickOnline(int connectionId, const QString& nick) const;
+        bool isNickIdentified(int connectionId, const QString& nick) const;
+        QStringList getNickChannels(int connectionId, const QString& nick) const;
+        bool isNickInChannel(int connectionId, const QString& channel, const QString& nick) const;
+        bool isNickAnyTypeOfOp(int connectionId, const QString& channel, const QString& nick) const;
+        QString getNickHostmask(int connectionId, const QString& nick) const;
+        void setNickHostmask(int connectionId, const QString& nick, const QString& hostmask);
+        void setNickRealName(int connectionId, const QString& nick, const QString& realName);
+        void setNewNickname(int connectionId, const QString& nick, const QString& newNick);
+        void setNickOnlineSince(int connectionId, const QString& nick, const QDateTime& onlineSince);
+        void setNickNetServer(int connectionId, const QString& nick, const QString& netServer);
+        void setNickNetServerInfo(int connectionId, const QString& nick, const QString& netServerInfo);
+        uint getNickActivity(int connectionId, const QString& channel, const QString& nick) const;
+        void setNickMoreActive(int connectionId, const QString& channel, const QString& nick);
+        void setAllChannelNicksLessActive(int connectionId, const QString& channel);
+        uint getNickTimestamp(int connectionId, const QString& channel, const QString& nick) const;
+        uint getNickStatusValue(int connectionId, const QString& channel, const QString& nick) const;
 
-        void setNickMode(const QString& nick, const QString& channel, unsigned int mode);
-        void setNickMode(const QString& nick, const QString& channel, char mode, bool state);
-        void setNickAway(const QString& nick, bool away, const QString& awayMessage = QString());
-        void setNickIdentified(const QString& nick, bool identified);
+        void setNickMode(int connectionId, const QString& channel, const QString& nick, unsigned int mode);
+        void setNickMode(int connectionId, const QString& channel, const QString& nick, char mode, bool state);
+        void setNickAway(int connectionId, const QString& nick, bool away, const QString& awayMessage = QString());
+        void setNickIdentified(int connectionId, const QString& nick, bool identified);
 
         void setHostmaskColumn(bool hostmask) { m_hostmask = hostmask; }
 
     private:
-        QList<Nick2*> m_nickList;
-        QHash<QString, Nick2*> m_nickHash;
-        Server* m_server;
+        QHash<int, QList<Nick2*> > m_nickLists;
+        QHash<int, NickHash> m_nickHashes;
+        QMap<int, QPersistentModelIndex> m_servers;
+        int m_connectionId;
         bool m_hostmask;
         QString m_whatsThis;
         QTimer* m_delayedResetTimer;
@@ -93,9 +106,10 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
     Q_OBJECT
 
     public:
-        explicit ChannelNickListFilterModel(Channel* channel);
+        explicit ChannelNickListFilterModel(int connectionId, Channel* channel);
         ~ChannelNickListFilterModel();
 
+        QModelIndex serverIndex() const;
         QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
 
         bool isNickInChannel(const QString& nick) const;
@@ -129,6 +143,7 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
     private:
         Channel* m_channel;
         QString m_channelName;
+        int m_connectionId;
         int m_completionPosition;
 };
 

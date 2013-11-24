@@ -90,7 +90,10 @@ Server::Server(QObject* parent, ConnectionSettings& settings) : QObject(parent)
     m_nickIndices.append(0);
 
     m_nickListModel = new QStringListModel(this);
-    m_nickListModel2 = new NickListModel(this);
+
+    Application* konvApp = static_cast<Application*>(kapp);
+    m_nickListModel2 = konvApp->getConnectionManager()->getNickListModel();
+    m_nickListModel2->addServer(connectionId());
 
     m_currentLag = -1;
     m_rawLog = 0;
@@ -158,6 +161,7 @@ Server::Server(QObject* parent, ConnectionSettings& settings) : QObject(parent)
 
 Server::~Server()
 {
+    m_nickListModel2->removeServer(connectionId());
     //send queued messages
     kDebug() << "Server::~Server(" << getServerName() << ")";
 
@@ -1768,18 +1772,18 @@ ChannelNickPtr Server::setChannelNick(const QString& channelName, const QString&
         {
             channelNick = addNickToUnjoinedChannelsList(channelName, nickname);
             channelNick->setMode(mode);
-            m_nickListModel2->setNickMode(nickname, channelName, mode);
+            m_nickListModel2->setNickMode(m_connectionId, channelName, nickname, mode);
         }
         else return ChannelNickPtr(); //! TODO FIXME null null null
     }
 
     if (mode != 99) channelNick->setMode(mode);
 
-    m_nickListModel2->addNickToChannel(nickname, channelName);
+    m_nickListModel2->addNickToChannel(m_connectionId, channelName, nickname);
 
     //TODO why 99?
     if(mode != 99)
-        m_nickListModel2->setNickMode(nickname, channelName, mode);
+        m_nickListModel2->setNickMode(m_connectionId, channelName, nickname, mode);
 
     return channelNick;
 }
@@ -1787,8 +1791,8 @@ ChannelNickPtr Server::setChannelNick(const QString& channelName, const QString&
 // Returns a list of all the shared channels
 QStringList Server::getSharedChannels(const QString& nickname)
 {
-    QStringList channelList = m_nickListModel2->getNickChannels(nickname);
-    QStringList ourChannelList = m_nickListModel2->getNickChannels(getNickname());
+    QStringList channelList = m_nickListModel2->getNickChannels(m_connectionId, nickname);
+    QStringList ourChannelList = m_nickListModel2->getNickChannels(m_connectionId, getNickname());
 
     QStringList sharedChannelsList = QStringList();
     QStringList::ConstIterator i;
@@ -1805,7 +1809,7 @@ QStringList Server::getSharedChannels(const QString& nickname)
 // Returns a list of all the channels (joined or unjoined) that a nick is in.
 QStringList Server::getNickChannels(const QString& nickname)
 {
-    return m_nickListModel2->getNickChannels(nickname);
+    return m_nickListModel2->getNickChannels(m_connectionId, nickname);
 }
 
 bool Server::isNickOnline(const QString &nickname)
@@ -2127,6 +2131,7 @@ quint16 Server::stringToPort(const QString &port, bool *ok)
 
 QString Server::recipientNick() const
 {
+    //FIXME set the root index for this view
     return DCC::RecipientDialog::getNickname(getViewContainer()->getWindow(), m_nickListModel2);
 }
 
@@ -2707,7 +2712,7 @@ Channel* Server::joinChannel(const QString& name, const QString& hostmask)
         nickInfo->setHostmask(hostmask);
     }
 
-    m_nickListModel2->setNickHostmask(getNickname(), hostmask);
+    m_nickListModel2->setNickHostmask(m_connectionId, getNickname(), hostmask);
 
     channel->joinNickname(channelNick);
 
@@ -2774,7 +2779,7 @@ void Server::updateChannelMode(const QString &updater, const QString &channelNam
         addNickToJoinedChannelsList(channelName, parameter);
 
         //TODO update the mode as well.
-        m_nickListModel2->setNickMode(parameter, channelName, mode, plus);
+        m_nickListModel2->setNickMode(m_connectionId, channelName, parameter, mode, plus);
     }
 
     // Update channel ban list.
@@ -2843,7 +2848,7 @@ void Server::queueNicks(const QString& channelName, const QStringList& nicknameL
 // Returns the NickInfo for the nickname.
 ChannelNickPtr Server::addNickToJoinedChannelsList(const QString& channelName, const QString& nickname)
 {
-    m_nickListModel2->addNickToChannel(nickname, channelName);
+    m_nickListModel2->addNickToChannel(m_connectionId, channelName, nickname);
 
     bool doChannelJoinedSignal = false;
     bool doWatchedNickChangedSignal = false;
@@ -2908,7 +2913,7 @@ ChannelNickPtr Server::addNickToJoinedChannelsList(const QString& channelName, c
 // Returns the NickInfo for the nickname.
 ChannelNickPtr Server::addNickToUnjoinedChannelsList(const QString& channelName, const QString& nickname)
 {
-    m_nickListModel2->addNickToChannel(nickname, channelName);
+    m_nickListModel2->addNickToChannel(m_connectionId, channelName, nickname);
 
     bool doChannelUnjoinedSignal = false;
     bool doWatchedNickChangedSignal = false;
@@ -3254,7 +3259,7 @@ Channel* Server::nickJoinsChannel(const QString &channelName, const QString &nic
     {
         // Update NickInfo.
         ChannelNickPtr channelNick = addNickToJoinedChannelsList(channelName, nickname);
-        m_nickListModel2->setNickHostmask(nickname, hostmask);
+        m_nickListModel2->setNickHostmask(m_connectionId, nickname, hostmask);
 
         NickInfoPtr nickInfo = channelNick->getNickInfo();
         if ((nickInfo->getHostmask() != hostmask) && !hostmask.isEmpty())
@@ -3279,7 +3284,7 @@ void Server::addHostmaskToNick(const QString& sourceNick, const QString& sourceH
         }
     }
 
-    m_nickListModel2->setNickHostmask(sourceNick, sourceHostmask);
+    m_nickListModel2->setNickHostmask(m_connectionId, sourceNick, sourceHostmask);
 }
 
 Channel* Server::removeNickFromChannel(const QString &channelName, const QString &nickname, const QString &reason, bool quit)
@@ -3306,7 +3311,7 @@ Channel* Server::removeNickFromChannel(const QString &channelName, const QString
         deleteNickIfUnlisted(nicky);
     }
 
-    m_nickListModel2->removeNickFromChannel(nickname, channelName);
+    m_nickListModel2->removeNickFromChannel(m_connectionId, channelName, nickname);
 
     return outChannel;
 }
@@ -3348,7 +3353,7 @@ void Server::removeNickFromServer(const QString &nickname,const QString &reason)
 
 void Server::renameNick(const QString &nickname, const QString &newNick)
 {
-    m_nickListModel2->setNewNickname(nickname, newNick);
+    m_nickListModel2->setNewNickname(m_connectionId, nickname, newNick);
 
     if(nickname.isEmpty() || newNick.isEmpty())
     {
@@ -3400,8 +3405,8 @@ void Server::renameNick(const QString &nickname, const QString &newNick)
 
 void Server::userhost(const QString& nick,const QString& hostmask,bool away,bool /* ircOp */)
 {
-    m_nickListModel2->setNickHostmask(nick, hostmask);
-    m_nickListModel2->setNickAway(nick, away);
+    m_nickListModel2->setNickHostmask(m_connectionId, nick, hostmask);
+    m_nickListModel2->setNickAway(m_connectionId, nick, away);
     addHostmaskToNick(nick, hostmask);
     // remember my IP for DCC things
                                                   // myself
@@ -3902,7 +3907,7 @@ void Server::requestUnaway()
 
 void Server::setAway(bool away)
 {
-    m_nickListModel2->setNickAway(getNickname(), away);
+    m_nickListModel2->setNickAway(m_connectionId, getNickname(), away);
 
     IdentityPtr identity = getIdentity();
 

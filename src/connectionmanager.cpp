@@ -31,6 +31,7 @@ ConnectionManager::ConnectionManager(QObject* parent)
 //    if (Solid::Networking::status() != Solid::Networking::Connected)
 //        m_overrideAutoReconnect = true;
 
+    m_nickListModel = 0;
     connect(this, SIGNAL(requestReconnect(Server*)), this, SLOT(handleReconnect(Server*)));
 }
 
@@ -671,6 +672,14 @@ Server* ConnectionManager::getServerByName(const QString& name, NameMatchFlags f
     }
 
     return 0;
+}
+
+NickListModel* ConnectionManager::getNickListModel()
+{
+    if (!m_nickListModel)
+        m_nickListModel = new NickListModel(this);
+
+    return m_nickListModel;
 }
 
 void ConnectionManager::involuntaryQuitServers()

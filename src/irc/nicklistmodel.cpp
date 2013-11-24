@@ -12,13 +12,15 @@
 #include "nicklistmodel.h"
 #include "application.h"
 #include "preferences.h"
+#include "connectionmanager.h"
 
 #include <QTextCursor>
 
-NickListModel::NickListModel(Server* server) : QAbstractListModel(server)
+NickListModel::NickListModel(QObject* parent) : QAbstractListModel(parent)
 {
-    m_nickHash = QHash<QString, Nick2*>();
-    m_server = server;
+    //m_nickHashes = QHash<int, NickHash>();
+    //m_nickLists = QHash<int, QList<Nick2*> >();
+   // m_servers = QMap<int, QPersistentModelIndex>();
     m_hostmask = false;
 
     Images* images = Application::instance()->images();
@@ -64,88 +66,123 @@ NickListModel::~NickListModel()
 
 void NickListModel::clear()
 {
-    m_nickHash.clear();
-    m_nickList.clear();
+    m_nickHashes.clear();
+    m_nickLists.clear();
+    m_servers.clear();
+}
+
+void NickListModel::addServer(int connectionId)
+{
+
+    m_servers[connectionId] = QPersistentModelIndex();
+    m_nickHashes.insert(connectionId, NickHash());
+    m_nickLists.insert(connectionId, QList<Nick2*>());
+    QMap<int, QPersistentModelIndex>::const_iterator i = m_servers.find(connectionId);
+    int position = 0;
+    while (i != m_servers.constBegin())
+    {
+        position++;
+        i--;
+    }
+    QModelIndex index = NickListModel::createIndex(position, 0, (quint32)connectionId);
+    QPersistentModelIndex serverIndex = QPersistentModelIndex(index);
+    m_servers[index.internalId()] = serverIndex;
+}
+
+void NickListModel::removeServer(int connectionId)
+{
+    if (m_servers.contains(connectionId))
+    {
+        m_servers.remove(connectionId);
+        m_nickHashes.remove(connectionId);
+        m_nickLists.remove(connectionId);
+    }
 }
 
 /* insert without resetting the model */
-void NickListModel::insertNick(Nick2* item)
+void NickListModel::insertNick(int connectionId, Nick2* item)
 {
-    uint position = m_nickList.count();
-    beginInsertRows(QModelIndex(), position, position);
-    m_nickList.append(item);
-    m_nickHash.insert(item->getNickname(), item);
-    endInsertRows();
-}
-
-void NickListModel::addNickToChannel(const QString& nick, const QString& channel)
-{
-    if (!isNickOnline(nick))
+    if (m_servers.contains(connectionId))
     {
-        Nick2* newNick = new Nick2(nick, m_server);
-        insertNick(newNick);
+        uint position = m_nickLists[connectionId].count();
+        beginInsertRows(m_servers[connectionId], position, position);
+        m_nickLists[connectionId].append(item);
+        m_nickHashes[connectionId].insert(item->getNickname(), item);
+        endInsertRows();
     }
-
-    m_nickHash[nick]->addChannel(channel);
-
-    uint position = m_nickList.indexOf(m_nickHash[nick]);
-    QModelIndex index = NickListModel::index(position, 0);
-    emit dataChanged(index, index); //changes tooltips in existing channels, and all roles in new channel
 }
 
-void NickListModel::removeNick(const QString& nick)
+void NickListModel::addNickToChannel(int connectionId, const QString& channel, const QString& nick)
 {
-    if (isNickOnline(nick))
+    if (m_servers.contains(connectionId))
     {
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
+        if (!isNickOnline(connectionId, nick))
+        {
+            Nick2* newNick = new Nick2(connectionId, nick);
+            insertNick(connectionId, newNick);
+        }
 
-        beginRemoveRows(QModelIndex(), position, position);
-        m_nickHash.remove(nick);
-        m_nickList.removeAt(position);
+        m_nickHashes[connectionId][nick]->addChannel(channel);
+
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
+        emit dataChanged(index, index); //changes tooltips in existing channels, and all roles in new channel
+    }
+}
+
+void NickListModel::removeNick(int connectionId, const QString& nick)
+{
+    if (isNickOnline(connectionId, nick))
+    {
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+
+        beginRemoveRows(m_servers[connectionId], position, position);
+        m_nickHashes[connectionId].remove(nick);
+        m_nickLists[connectionId].removeAt(position);
         endRemoveRows();
     }
 }
 
-void NickListModel::removeNickFromChannel(const QString& nick, const QString& channel)
+void NickListModel::removeNickFromChannel(int connectionId, const QString& channel, const QString& nick)
 {
-    if (isNickOnline(nick))
+    if (isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->removeChannel(channel);
+        m_nickHashes[connectionId][nick]->removeChannel(channel);
 
-        if(!m_nickHash[nick]->isInAnyChannel())
+        if(!m_nickHashes[connectionId][nick]->isInAnyChannel())
         {
-            removeNick(nick);
+            removeNick(connectionId, nick);
         }
         else
         {
-            uint position = m_nickList.indexOf(m_nickHash[nick]);
-            QModelIndex index = NickListModel::index(position, 0);
+            uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+            QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
             emit dataChanged(index, index); //changes tooltips in existing channels, and all roles in removed channel
         }
     }
 }
 
-void NickListModel::removeAllNicksFromChannel(const QString& channel)
+void NickListModel::removeAllNicksFromChannel(int connectionId, const QString& channel)
 {
-    if (!m_nickHash.isEmpty())
+    if (!m_nickHashes[connectionId].isEmpty())
     {
-        QHash<QString, Nick2*>::iterator i = m_nickHash.begin();
+        NickHash::iterator i = m_nickHashes[connectionId].begin();
 
-        while (i != m_nickHash.end())
+        while (i != m_nickHashes[connectionId].end())
         {
             i.value()->removeChannel(channel);
 
-            uint position = m_nickList.indexOf(i.value());
+            uint position = m_nickLists[connectionId].indexOf(i.value());
             if (!i.value()->isInAnyChannel())
             {
-                beginRemoveRows(QModelIndex(), position, position);
-                i = m_nickHash.erase(i);
-                m_nickList.removeAt(position);
+                beginRemoveRows(m_servers[connectionId], position, position);
+                i = m_nickHashes[connectionId].erase(i);
+                m_nickLists[connectionId].removeAt(position);
                 endRemoveRows();
             }
             else
             {
-                QModelIndex index = NickListModel::index(position, 0);
+                QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
                 emit dataChanged(index, index); //changes tooltips in existing channels, and all roles in removed channel
 
                 ++i;
@@ -154,15 +191,53 @@ void NickListModel::removeAllNicksFromChannel(const QString& channel)
     }
 }
 
-QModelIndex NickListModel::index(int row, int column, const QModelIndex& /* parent */) const
+QPersistentModelIndex NickListModel::serverIndex(int connectionId)
+{
+    if (m_servers.contains(connectionId))
+        return m_servers[connectionId];
+
+    return QPersistentModelIndex();
+}
+
+QModelIndex NickListModel::index(int row, int column, const QModelIndex& parent) const
 {
     if (row < 0 || column < 0)
         return QModelIndex();
 
-    if (row >= rowCount() || column >= columnCount())
+    if (row >= rowCount(parent) || column >= columnCount())
         return QModelIndex();
 
-    return createIndex(row, column, m_nickList.at(row));
+    if (parent == QModelIndex())
+    {
+        QMap<int, QPersistentModelIndex>::const_iterator i = m_servers.constBegin();
+        int position = 0;
+        while (i != m_servers.constEnd() && position < row)
+        {
+            position++;
+            i++;
+        }
+        return i.value();
+        //return createIndex(row, column, (quint32)i.key());
+    }
+
+    return createIndex(row, column, m_nickLists[parent.internalId()].at(row));
+}
+
+QModelIndex NickListModel::parent(const QModelIndex& index) const
+{
+    if (index.isValid())
+    {
+        if (m_servers.contains(index.internalId()))
+            return QModelIndex();
+        else
+        {
+            Nick2* item = static_cast<Nick2*>(index.internalPointer());
+            if (item && m_servers.contains(item->getConnectionId()))
+                return m_servers[item->getConnectionId()];
+        }
+    }
+
+    return QModelIndex();
 }
 
 QVariant NickListModel::headerData(int section, Qt::Orientation orientation, int role) const
@@ -181,15 +256,38 @@ int NickListModel::columnCount(const QModelIndex& /*parent*/) const
     return 1;
 }
 
-int NickListModel::rowCount(const QModelIndex& /*parent*/) const
+int NickListModel::rowCount(const QModelIndex& parent) const
 {
-    return m_nickList.count();
+    if (parent.isValid())
+    {
+        if (m_servers.contains(parent.internalId()))
+            return m_nickLists[parent.internalId()].count();
+        else
+            return 0;
+    }
+    else
+        return m_servers.count();
 }
 
 QVariant NickListModel::data(const QModelIndex& index, int role) const
 {
-    if (!index.isValid() || index.row() >= m_nickList.count())
+    if (!index.isValid() || index.row() >= rowCount(index.parent()))
         return QVariant();
+
+    if (!index.parent().isValid() && m_servers.contains(index.internalId())) //top level item
+    {
+        if (role == Qt::DisplayRole)
+        {
+            Application* konvApp = static_cast<Application*>(kapp);
+            Server* server = konvApp->getConnectionManager()->getServerByConnectionId(index.internalId());
+            if (server)
+                return server->getServerName();
+            else
+                return QVariant();
+        }
+        else
+            return QVariant();
+    }
 
     Nick2* item = static_cast<Nick2*>(index.internalPointer());
 
@@ -233,6 +331,25 @@ QVariant NickListModel::data(const QModelIndex& index, int role) const
     return QVariant();
 }
 
+Qt::ItemFlags NickListModel::flags(const QModelIndex& index) const
+{
+    if (!index.isValid())
+        return 0;
+
+    return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+}
+
+bool NickListModel::hasChildren(const QModelIndex& index) const
+{
+    if (index.isValid() && !index.parent().isValid() && m_servers.contains(index.internalId()))
+        return (m_nickLists[index.internalId()].count() > 0);
+
+    else if(!index.isValid())
+        return (m_servers.count() > 0);
+
+    return false;
+}
+
 QHash<int, QByteArray> NickListModel::roleNames() const
 {
     //TODO do rolenames
@@ -251,134 +368,137 @@ void NickListModel::updateMinimumRowHeight()
     m_minimumRowHeight = images->getNickIcon(Images::Normal, false).height() + 2;
 }
 
-bool NickListModel::isNickOnline(const QString& nick) const
+bool NickListModel::isNickOnline(int connectionId, const QString& nick) const
 {
-    return m_nickHash.contains(nick);
-}
-
-bool NickListModel::isNickIdentified(const QString& nick) const
-{
-    if (isNickOnline(nick))
-        return m_nickHash[nick]->isIdentified();
+    if (m_nickHashes.contains(connectionId))
+        return m_nickHashes[connectionId].contains(nick);
 
     return false;
 }
 
-QStringList NickListModel::getNickChannels(const QString& nick) const
+bool NickListModel::isNickIdentified(int connectionId, const QString& nick) const
 {
-    if (isNickOnline(nick))
-        return m_nickHash[nick]->getChannels();
+    if (isNickOnline(connectionId, nick))
+        return m_nickHashes[connectionId][nick]->isIdentified();
+
+    return false;
+}
+
+QStringList NickListModel::getNickChannels(int connectionId, const QString& nick) const
+{
+    if (isNickOnline(connectionId, nick))
+        return m_nickHashes[connectionId][nick]->getChannels();
 
     return QStringList();
 }
 
-bool NickListModel::isNickInChannel(const QString& nick, const QString& channel) const
+bool NickListModel::isNickInChannel(int connectionId, const QString& channel, const QString& nick) const
 {
-    if (isNickOnline(nick))
-        return m_nickHash[nick]->isInChannel(channel);
+    if (isNickOnline(connectionId, nick))
+        return m_nickHashes[connectionId][nick]->isInChannel(channel);
 
     return false;
 }
 
-bool NickListModel::isNickAnyTypeOfOp(const QString& nick, const QString& channel) const
+bool NickListModel::isNickAnyTypeOfOp(int connectionId, const QString& channel, const QString& nick) const
 {
-    if (isNickOnline(nick) && isNickInChannel(nick, channel))
-        return m_nickHash.value(nick)->isAnyTypeOfOp(channel);
+    if (isNickOnline(connectionId, nick) && isNickInChannel(connectionId, channel, nick))
+        return m_nickHashes[connectionId][nick]->isAnyTypeOfOp(channel);
 
     return false;
 }
 
 
 //hostmask
-QString NickListModel::getNickHostmask(const QString& nick) const
+QString NickListModel::getNickHostmask(int connectionId, const QString& nick) const
 {
-    if (isNickOnline(nick))
-        return m_nickHash[nick]->getHostmask();
+    if (isNickOnline(connectionId, nick))
+        return m_nickHashes[connectionId][nick]->getHostmask();
 
     return QString();
 }
 
-void NickListModel::setNickHostmask(const QString& nick, const QString& hostmask)
+void NickListModel::setNickHostmask(int connectionId, const QString& nick, const QString& hostmask)
 {
-    if (!hostmask.isEmpty() && isNickOnline(nick))
+    if (!hostmask.isEmpty() && isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setHostmask(hostmask);
+        m_nickHashes[connectionId][nick]->setHostmask(hostmask);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
     }
 }
 
-void NickListModel::setNickRealName(const QString& nick, const QString& realName)
+void NickListModel::setNickRealName(int connectionId, const QString& nick, const QString& realName)
 {
-    if (!realName.isEmpty() && isNickOnline(nick))
+    if (!realName.isEmpty() && isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setRealName(realName);
+        m_nickHashes[connectionId][nick]->setRealName(realName);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
     }
 }
 
-void NickListModel::setNewNickname(const QString& nick, const QString& newNick)
+void NickListModel::setNewNickname(int connectionId, const QString& nick, const QString& newNick)
 {
-    if (isNickOnline(nick) && !newNick.isEmpty())
+    if (!newNick.isEmpty() && isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setNickname(newNick);
-        m_nickHash[newNick] = m_nickHash[nick];
+        m_nickHashes[connectionId][nick]->setNickname(newNick);
+        m_nickHashes[connectionId][newNick] = m_nickHashes[connectionId][nick];
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
-        m_nickHash.remove(nick);
+        m_nickHashes[connectionId].remove(nick);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
     }
 }
 
-void NickListModel::setNickOnlineSince(const QString& nick, const QDateTime& onlineSince)
+void NickListModel::setNickOnlineSince(int connectionId, const QString& nick, const QDateTime& onlineSince)
 {
-    if (isNickOnline(nick))
+    if (isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setOnlineSince(onlineSince);
+        m_nickHashes[connectionId][nick]->setOnlineSince(onlineSince);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
     }
 }
 
-void NickListModel::setNickNetServer(const QString& nick, const QString& netServer)
+void NickListModel::setNickNetServer(int connectionId, const QString& nick, const QString& netServer)
 {
-    if (isNickOnline(nick))
+    if (isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setNetServer(netServer);
+        m_nickHashes[connectionId][nick]->setNetServer(netServer);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
     }
 }
 
-void NickListModel::setNickNetServerInfo(const QString& nick, const QString& netServerInfo)
+void NickListModel::setNickNetServerInfo(int connectionId, const QString& nick, const QString& netServerInfo)
 {
-    if (isNickOnline(nick))
+    if (isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setNetServerInfo(netServerInfo);
+        m_nickHashes[connectionId][nick]->setNetServerInfo(netServerInfo);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
@@ -386,41 +506,41 @@ void NickListModel::setNickNetServerInfo(const QString& nick, const QString& net
 }
 
 //activity
-uint NickListModel::getNickActivity(const QString& nick, const QString& channel) const
+uint NickListModel::getNickActivity(int connectionId, const QString& channel, const QString& nick) const
 {
-    if (isNickOnline(nick))
-        return m_nickHash[nick]->getRecentActivity(channel);
+    if (isNickOnline(connectionId, nick))
+        return m_nickHashes[connectionId][nick]->getRecentActivity(channel);
 
     return 0;
 }
 
-void NickListModel::setNickMoreActive(const QString& nick, const QString& channel)
+void NickListModel::setNickMoreActive(int connectionId, const QString& channel, const QString& nick)
 {
-    if (isNickOnline(nick))
+    if (isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->moreActive(channel);
+        m_nickHashes[connectionId][nick]->moreActive(channel);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
     }
 }
 
-void NickListModel::setAllChannelNicksLessActive(const QString& channel)
+void NickListModel::setAllChannelNicksLessActive(int connectionId, const QString& channel)
 {
-    if (!m_nickHash.isEmpty())
+    if (!m_nickHashes[connectionId].isEmpty())
     {
-        QHash<QString, Nick2*>::const_iterator i = m_nickHash.constBegin();
+        NickHash::const_iterator i = m_nickHashes[connectionId].constBegin();
         uint position = 0;
 
-        for (i = m_nickHash.constBegin(); i != m_nickHash.constEnd(); ++i)
+        for (i = m_nickHashes[connectionId].constBegin(); i != m_nickHashes[connectionId].constEnd(); ++i)
         {
-            if (isNickInChannel(i.key(), channel))
+            if (isNickInChannel(connectionId, i.key(), channel))
             {
                 i.value()->lessActive(channel);
-                QModelIndex index = NickListModel::index(m_nickList.indexOf(i.value()), 0);
+                QModelIndex index = NickListModel::index(m_nickLists[connectionId].indexOf(i.value()), 0, m_servers[connectionId]);
 
                 emit dataChanged(index, index);
             }
@@ -431,73 +551,73 @@ void NickListModel::setAllChannelNicksLessActive(const QString& channel)
 }
 
 //timestamp
-uint NickListModel::getNickTimestamp(const QString& nick, const QString& channel) const
+uint NickListModel::getNickTimestamp(int connectionId, const QString& channel, const QString& nick) const
 {
-    if (isNickOnline(nick))
-        return m_nickHash[nick]->getTimestamp(channel);
+    if (isNickOnline(connectionId, nick))
+        return m_nickHashes[connectionId][nick]->getTimestamp(channel);
 
     return 0;
 }
 
 //status
-uint NickListModel::getNickStatusValue(const QString& nick, const QString& channel) const
+uint NickListModel::getNickStatusValue(int connectionId, const QString& channel, const QString& nick) const
 {
-    if (isNickOnline(nick))
-        return m_nickHash[nick]->getStatusValue(channel);
+    if (isNickOnline(connectionId, nick))
+        return m_nickHashes[connectionId][nick]->getStatusValue(channel);
 
     return 0;
 }
 
-void NickListModel::setNickMode(const QString& nick, const QString& channel, unsigned int mode)
+void NickListModel::setNickMode(int connectionId, const QString& channel, const QString& nick, unsigned int mode)
 {
-    if (isNickOnline(nick))
+    if (isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setMode(channel, mode);
+        m_nickHashes[connectionId][nick]->setMode(channel, mode);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DecorationRole);
     }
 }
 
-void NickListModel::setNickMode(const QString& nick, const QString& channel, char mode, bool state)
+void NickListModel::setNickMode(int connectionId, const QString& channel, const QString& nick, char mode, bool state)
 {
-    if (isNickOnline(nick))
+    if (isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setMode(channel, mode, state);
+        m_nickHashes[connectionId][nick]->setMode(channel, mode, state);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DecorationRole);
     }
 }
 
-void NickListModel::setNickAway(const QString& nick, bool away, const QString& awayMessage)
+void NickListModel::setNickAway(int connectionId, const QString& nick, bool away, const QString& awayMessage)
 {
-    if (isNickOnline(nick))
+    if (isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setAway(away, awayMessage);
+        m_nickHashes[connectionId][nick]->setAway(away, awayMessage);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DecorationRole << Qt::DisplayRole);
     }
 }
 
-void NickListModel::setNickIdentified(const QString& nick, bool identified)
+void NickListModel::setNickIdentified(int connectionId, const QString& nick, bool identified)
 {
-    if (isNickOnline(nick))
+    if (isNickOnline(connectionId, nick))
     {
-        m_nickHash[nick]->setIdentified(identified);
+        m_nickHashes[connectionId][nick]->setIdentified(identified);
 
-        uint position = m_nickList.indexOf(m_nickHash[nick]);
-        QModelIndex index = NickListModel::index(position, 0);
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][nick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
 
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
@@ -517,7 +637,7 @@ struct timestampLessThanSort
     }
 };
 
-ChannelNickListFilterModel::ChannelNickListFilterModel(Channel* channel) : QSortFilterProxyModel(channel)
+ChannelNickListFilterModel::ChannelNickListFilterModel(int connectionId, Channel* channel) : QSortFilterProxyModel(channel)
 {
     //nick list model filters
     if (channel)
@@ -532,6 +652,8 @@ ChannelNickListFilterModel::ChannelNickListFilterModel(Channel* channel) : QSort
         m_channelName = QString();
     }
 
+    m_connectionId = connectionId;
+
     QSortFilterProxyModel::setDynamicSortFilter(true);
     QSortFilterProxyModel::sort(0, Qt::AscendingOrder);
 }
@@ -542,43 +664,48 @@ ChannelNickListFilterModel::~ChannelNickListFilterModel()
 
 void ChannelNickListFilterModel::insertNick(Nick2* item)
 {
-    if (sourceNickModel() && sourceNickModel()->isNickOnline(item->getNickname()))
+    if (sourceNickModel() && sourceNickModel()->isNickOnline(m_connectionId, item->getNickname()))
     {
-        sourceNickModel()->insertNick(item);
+        sourceNickModel()->insertNick(m_connectionId, item);
 
-        sourceNickModel()->addNickToChannel(item->getNickname(), m_channelName);
+        sourceNickModel()->addNickToChannel(m_connectionId, m_channelName, item->getNickname());
     }
 }
 
 void ChannelNickListFilterModel::removeNick(const QString& nick)
 {
     if (sourceNickModel())
-        sourceNickModel()->removeNickFromChannel(nick, m_channelName);
+        sourceNickModel()->removeNickFromChannel(m_connectionId, m_channelName, nick);
 }
 
 void ChannelNickListFilterModel::removeAllNicks()
 {
     if (sourceNickModel())
-        sourceNickModel()->removeAllNicksFromChannel(m_channelName);
+        sourceNickModel()->removeAllNicksFromChannel(m_connectionId, m_channelName);
 }
 
 void ChannelNickListFilterModel::setAllNicksLessActive()
 {
     if (sourceNickModel())
-        sourceNickModel()->setAllChannelNicksLessActive(m_channelName);
+        sourceNickModel()->setAllChannelNicksLessActive(m_connectionId, m_channelName);
 }
 
 NickListModel* ChannelNickListFilterModel::sourceNickModel() const
 {
-    return static_cast<NickListModel*>(sourceModel());
+        return static_cast<NickListModel*>(sourceModel());
+}
+
+QModelIndex ChannelNickListFilterModel::serverIndex() const
+{
+    return mapFromSource(sourceNickModel()->serverIndex(m_connectionId));
 }
 
 QVariant ChannelNickListFilterModel::data(const QModelIndex& index, int role) const
 {
-    if (!index.isValid() || index.row() >= rowCount())
+    if (!index.isValid() || index.row() >= rowCount(serverIndex()))
         return QVariant();
 
-    if (m_channel && (role == Qt::ToolTipRole || role == Qt::DecorationRole || Qt::ForegroundRole))
+    if (m_channel && index.parent().isValid() && (role == Qt::DecorationRole || Qt::ForegroundRole || role == Qt::ToolTipRole))
     {
         Nick2* nick = static_cast<Nick2*>(mapToSource(index).internalPointer());
 
@@ -596,7 +723,7 @@ QVariant ChannelNickListFilterModel::data(const QModelIndex& index, int role) co
 bool ChannelNickListFilterModel::isNickInChannel(const QString& nick) const
 {
     if (sourceNickModel())
-        return sourceNickModel()->isNickInChannel(nick, m_channelName);
+        return sourceNickModel()->isNickInChannel(m_connectionId, m_channelName, nick);
 
     return false;
 }
@@ -604,7 +731,7 @@ bool ChannelNickListFilterModel::isNickInChannel(const QString& nick) const
 bool ChannelNickListFilterModel::isNickAnyTypeOfOp(const QString& nick) const
 {
     if (sourceNickModel())
-        return sourceNickModel()->isNickAnyTypeOfOp(nick, m_channelName);
+        return sourceNickModel()->isNickAnyTypeOfOp(m_connectionId, m_channelName, nick);
 
     return false;
 }
@@ -621,7 +748,7 @@ void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
     QString line = inputBar->toPlainText();
     QString newLine;
     // Check if completion position is out of range
-    if (m_completionPosition >= rowCount()) m_completionPosition = 0;
+    if (m_completionPosition >= rowCount(serverIndex())) m_completionPosition = 0;
 
     // Check, which completion mode is active
     char mode = inputBar->getCompletionMode();
@@ -684,13 +811,13 @@ void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
                     }
                 }
             } // Cycle completion
-            else if(Preferences::self()->nickCompletionMode() == 0 && rowCount() > 0)
+            else if(Preferences::self()->nickCompletionMode() == 0 && rowCount(serverIndex()) > 0)
             {
                 if(mode == '\0') {
                     uint timestamp = 0;
                     int listPosition = 0;
 
-                    for (int i = 0; i < rowCount(); i++)
+                    for (int i = 0; i < rowCount(serverIndex()); i++)
                     {
                         Nick2* nick = static_cast<Nick2*>(mapToSource(index(i, 0)).internalPointer());
                         if(nick->getNickname().startsWith(pattern, Preferences::self()->nickCompletionCaseSensitive() ? Qt::CaseSensitive : Qt::CaseInsensitive) &&
@@ -726,7 +853,7 @@ void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
                     m_completionPosition++;
 
                     // wrap around
-                    if(m_completionPosition == rowCount())
+                    if(m_completionPosition == rowCount(serverIndex()))
                     {
                         m_completionPosition = 0;
                     }
@@ -794,7 +921,7 @@ QString ChannelNickListFilterModel::completeNick(const QString& pattern, bool& c
 
     QRegExp regexp(prefix + QRegExp::escape(pattern));
     regexp.setCaseSensitivity(caseSensitive ? Qt::CaseSensitive : Qt::CaseInsensitive);
-    for (int i = 0; i < rowCount(); ++i)
+    for (int i = 0; i < rowCount(serverIndex()); ++i)
     {
         QString nickName = QString();
         Nick2* nick = static_cast<Nick2*>(mapToSource(index(i, 0)).internalPointer());
@@ -854,7 +981,7 @@ void ChannelNickListFilterModel::endNickCompletion()
     if (m_completionPosition)
         m_completionPosition--;
     else
-        m_completionPosition = rowCount() - 1;
+        m_completionPosition = rowCount(serverIndex()) - 1;
 }
 
 bool ChannelNickListFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
@@ -862,10 +989,17 @@ bool ChannelNickListFilterModel::filterAcceptsRow(int sourceRow, const QModelInd
     if (sourceNickModel())
     {
         QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
-        Nick2* nick = static_cast<Nick2*>(index.internalPointer());
 
-        if (nick)
-            return nick->isInChannel(m_channelName);
+        if (index.isValid())
+        {
+            if (sourceNickModel()->hasChildren(sourceParent) && m_connectionId == index.internalId())
+                return true;
+
+            Nick2* nick = static_cast<Nick2*>(index.internalPointer());
+
+            if (nick)
+                return nick->isInChannel(m_channelName);
+        }
     }
 
     return false;

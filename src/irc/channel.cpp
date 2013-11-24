@@ -205,12 +205,10 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
     nicknameListView=new NickListView(nickListButtons, this);
     nicknameListView->installEventFilter(this);
 
-    m_channelNickListModel = new ChannelNickListFilterModel(this);
-    m_channelNickListModel->setDynamicSortFilter(true);
 
     m_nicknameListView2 = new QListView(nickListButtons);
-    m_nicknameListView2->setModel(m_channelNickListModel);
     m_nicknameAllListView = new QListView(nickListButtons);
+    m_nicknameListTreeView = new QTreeView(nickListButtons);
 
     // initialize buttons grid, will be set up in updateQuickButtons
     m_buttonsGrid = 0;
@@ -268,7 +266,6 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
 
     connect(m_inputBar,SIGNAL (submit()),this,SLOT (channelTextEntered()) );
     connect(m_inputBar,SIGNAL (envelopeCommand()),this,SLOT (channelPassthroughCommand()) );
-    connect(m_inputBar, SIGNAL(endCompletion()), m_channelNickListModel, SLOT(endNickCompletion()));
     connect(m_inputBar,SIGNAL (textPasted(QString)),this,SLOT (textPasted(QString)) );
 
     connect(getTextView(), SIGNAL(textPasted(bool)), m_inputBar, SLOT(paste(bool)));
@@ -329,12 +326,20 @@ void Channel::setServer(Server* server)
     if (!server->getKeyForRecipient(getName()).isEmpty())
         cipherLabel->show();
     topicLine->setServer(server);
+    m_channelNickListModel = new ChannelNickListFilterModel(m_server->connectionId(), this);
+    m_channelNickListModel->setDynamicSortFilter(true);
+    m_channelNickListModel->setSourceModel(m_server->nickListModel2());
+    m_nicknameListView2->setModel(m_channelNickListModel);
+    m_nicknameListView2->setRootIndex(m_channelNickListModel->mapFromSource(m_server->nickListModel2()->serverIndex(m_server->connectionId())));
+    m_nicknameAllListView->setModel(m_server->nickListModel2());
+    m_nicknameAllListView->setRootIndex(m_server->nickListModel2()->serverIndex(m_server->connectionId()));
+    m_nicknameListTreeView->setModel(m_server->nickListModel2());
+
     refreshModeButtons();
     nicknameCombobox->setModel(m_server->nickListModel());
-    m_channelNickListModel->setSourceModel(m_server->nickListModel2());
-    m_nicknameAllListView->setModel(m_server->nickListModel2());
 
     connect(m_inputBar, SIGNAL(nickCompletion(IRCInput*)), m_channelNickListModel, SLOT(nickCompletion(IRCInput*)));
+    connect(m_inputBar, SIGNAL(endCompletion()), m_channelNickListModel, SLOT(endNickCompletion()));
     connect(Application::instance(), SIGNAL(appearanceChanged()), m_channelNickListModel, SLOT(invalidate()));
     connect(awayLabel, SIGNAL(unaway()), m_server, SLOT(requestUnaway()));
     connect(awayLabel, SIGNAL(awayMessageChanged(QString)), m_server, SLOT(requestAway(QString)));
@@ -464,7 +469,8 @@ void Channel::purgeNicks()
     m_ownChannelNick = 0;
 
     //delete all nicks in the filter model
-    m_channelNickListModel->removeAllNicks();
+    if (m_channelNickListModel)
+        m_channelNickListModel->removeAllNicks();
 
     // Purge nickname list
     qDeleteAll(nicknameList);
@@ -1266,7 +1272,7 @@ void Channel::updateMode(const QString& sourceNick, char mode, bool plus, const 
     // Note: nick repositioning in the nicknameListView should be
     // triggered by nickinfo / channelnick signals
 
-    m_server->nickListModel2()->setNickMode(parameter, getName(), mode, plus);
+    m_server->nickListModel2()->setNickMode(m_server->connectionId(), getName(), parameter, mode, plus);
 
     QString message;
     ChannelNickPtr parameterChannelNick = m_server->getChannelNick(getName(), parameter);
@@ -2050,7 +2056,7 @@ void Channel::refreshModeButtons()
 {
     QString nick = m_server->getNickname();
     bool enable = true;
-    if (m_channelNickListModel->isNickInChannel(nick))
+    if (m_channelNickListModel && m_channelNickListModel->isNickInChannel(nick))
         enable = m_channelNickListModel->isNickAnyTypeOfOp(nick);
 
     // if not channel nick, then enable is true - fall back to assuming they are op
@@ -2379,7 +2385,7 @@ void Channel::processQueuedNicks(bool flush)
             ChannelNickPtr nick = m_server->addNickToJoinedChannelsList(getName(), nickname);
             Q_ASSERT(nick);
             nick->setMode(mode);
-            m_server->nickListModel2()->setNickMode(nickname, getName(), mode);
+            m_server->nickListModel2()->setNickMode(m_server->connectionId(), getName(), nickname, mode);
 
             fastAddNickname(nick);
 
@@ -2576,7 +2582,7 @@ void Channel::appendAction(const QString& nickname, const QString& message)
 
 void Channel::nickActive(const QString& nickname) //FIXME reported to crash, can't reproduce
 {
-    m_server->nickListModel2()->setNickMoreActive(nickname, getName());
+    m_server->nickListModel2()->setNickMoreActive(m_server->connectionId(), getName(), nickname);
 
     ChannelNickPtr channelnick=getChannelNick(nickname);
     //XXX Would be nice to know why it can be null here...

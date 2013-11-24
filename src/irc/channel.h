@@ -28,6 +28,7 @@
 #include <QTimer>
 #include <QString>
 #include <QListView>
+#include <QTreeView>
 
 
 class QLabel;
@@ -322,6 +323,8 @@ class Channel : public ChatWindow
         NickListView* nicknameListView;
         QListView* m_nicknameListView2;
         QListView* m_nicknameAllListView;
+        QTreeView* m_nicknameListTreeView;
+
         ChannelNickListFilterModel* m_channelNickListModel;
         KHBox* commandLineBox;
         KVBox* nickListButtons;

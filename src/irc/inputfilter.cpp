@@ -245,7 +245,7 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
                 // Check if we ignore queries from this nick
                 if (!isIgnore(prefix, Ignore::Query))
                 {
-                    m_server->nickListModel2()->setNickHostmask(sourceNick, sourceHostmask);
+                    m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), sourceNick, sourceHostmask);
 
                     NickInfoPtr nickinfo = m_server->obtainNickInfo(sourceNick);
                     nickinfo->setHostmask(sourceHostmask);
@@ -1225,7 +1225,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
-                    m_server->nickListModel2()->setNickIdentified(parameterList.value(1), true);
+                    m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), parameterList.value(1), true);
 
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
@@ -1407,7 +1407,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(3))
                 {
-                    m_server->nickListModel2()->setNickAway(parameterList.value(1), true, trailing);
+                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(1), true, trailing);
 
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
                     if (nickInfo)
@@ -1453,8 +1453,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(4))
                 {
-                    m_server->nickListModel2()->setNickHostmask(parameterList.value(1), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
-                    m_server->nickListModel2()->setNickRealName(parameterList.value(1), trailing);
+                    m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), parameterList.value(1), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
+                    m_server->nickListModel2()->setNickRealName(m_server->connectionId(), parameterList.value(1), trailing);
 
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
                     if (nickInfo)
@@ -1514,7 +1514,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
-                    m_server->nickListModel2()->setNickIdentified(parameterList.value(1), true);
+                    m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), parameterList.value(1), true);
 
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
 
@@ -1553,9 +1553,9 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                                                     // G=away G@=away,op G+=away,voice
                     bool bAway = parameterList.value(6).toUpper().startsWith('G');
 
-                    m_server->nickListModel2()->setNickAway(parameterList.value(5), bAway);
-                    m_server->nickListModel2()->setNickHostmask(parameterList.value(5), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
-                    m_server->nickListModel2()->setNickRealName(parameterList.value(5), trailing.section(' ', 1));
+                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(5), bAway);
+                    m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), parameterList.value(5), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
+                    m_server->nickListModel2()->setNickRealName(m_server->connectionId(), parameterList.value(5), trailing.section(' ', 1));
 
                     if (nickInfo)
                     {
@@ -1733,9 +1733,9 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(4))
                 {
-                    m_server->nickListModel2()->setNickNetServer(parameterList.value(1), parameterList.value(2));
-                    m_server->nickListModel2()->setNickNetServerInfo(parameterList.value(1), trailing);
-                    m_server->nickListModel2()->setNickAway(parameterList.value(1), false);
+                    m_server->nickListModel2()->setNickNetServer(m_server->connectionId(), parameterList.value(1), parameterList.value(2));
+                    m_server->nickListModel2()->setNickNetServerInfo(m_server->connectionId(), parameterList.value(1), trailing);
+                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(1), false);
 
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
                     if (nickInfo)
@@ -1809,7 +1809,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
 
                     if (!signonTime.isNull())
                     {
-                        m_server->nickListModel2()->setNickOnlineSince(parameterList.value(1), signonTime);
+                        m_server->nickListModel2()->setNickOnlineSince(m_server->connectionId(), parameterList.value(1), signonTime);
                         NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
 
                         if (nickInfo)
@@ -1986,7 +1986,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(1))
                 {
-                    m_server->nickListModel2()->setNickAway(parameterList.value(0), true);
+                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(0), true);
 
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(0));
                     if (nickInfo)
@@ -2002,7 +2002,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(1))
                 {
-                    m_server->nickListModel2()->setNickAway(parameterList.value(0), false);
+                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(0), false);
                     NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(0));
 
                     if (nickInfo)
@@ -2192,7 +2192,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 {
                     m_server->appendStatusMessage(i18n("Info"), i18n("SASL authentication successful."));
                     m_server->capEndNegotiation();
-                    m_server->nickListModel2()->setNickIdentified(m_server->getNickname(), true);
+                    m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), m_server->getNickname(), true);
 
                     NickInfoPtr nickInfo = m_server->getNickInfo(m_server->getNickname());
                     if (nickInfo) nickInfo->setIdentified(true);
@@ -2422,7 +2422,7 @@ void InputFilter::parsePrivMsg(const QString& prefix, QStringList& parameterList
     {
         if(!isIgnore(prefix,Ignore::Query))
         {
-            m_server->nickListModel2()->setNickHostmask(source, sourceHostmask);
+            m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), source, sourceHostmask);
 
             NickInfoPtr nickinfo = m_server->obtainNickInfo(source);
             nickinfo->setHostmask(sourceHostmask);

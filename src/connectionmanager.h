@@ -20,6 +20,7 @@
 
 
 class ConnectionSettings;
+class NickListModel;
 
 class ConnectionManager : public QObject
 {
@@ -42,6 +43,7 @@ class ConnectionManager : public QObject
         Server* getServerByConnectionId(int connectionId);
         Server* getServerByName(const QString& name, NameMatchFlags flags = MatchByName);
 
+        NickListModel* getNickListModel();
 
     public slots:
         void connectTo(Konversation::ConnectionFlag flag,
@@ -99,6 +101,7 @@ class ConnectionManager : public QObject
         bool validateIdentity(IdentityPtr identity, bool interactive = true);
 
         QMap<int, Server*> m_connectionList;
+        NickListModel* m_nickListModel;
         QSet<uint> m_activeIdentities;
         bool m_overrideAutoReconnect;
 

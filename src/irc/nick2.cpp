@@ -16,13 +16,13 @@
 #include "images.h"
 #include "preferences.h"
 
-Nick2::Nick2(const QString& nick, Server* server) : QObject()
+Nick2::Nick2(int connectionId, const QString& nick) : QObject()
 {
     m_nick = nick;
     m_channelHash = ChannelHash();
 
     m_loweredNickname = nick.toLower();
-    m_owningServer = server;
+    m_connectionId = connectionId;
     m_away = false;
     m_identified = false;
     m_printedOnline = false;
@@ -532,10 +532,9 @@ QString Nick2::getPrettyOnlineSince() const
     return KGlobal::locale()->formatDateTime(m_onlineSince, KLocale::FancyLongDate, false);
 }
 
-// Return the Server object that owns this NickInfo object.
-Server* Nick2::getServer() const
+int Nick2::getConnectionId() const
 {
-    return m_owningServer;
+    return m_connectionId;
 }
 
 void Nick2::setNickname(const QString& newNickname)

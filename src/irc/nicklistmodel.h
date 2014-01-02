@@ -49,6 +49,8 @@ class NickListModel : public QAbstractListModel
         void removeNickFromChannel(int connectionId, const QString& channel, const QString& nick);
         void removeAllNicksFromChannel(int connectionId, const QString& channel);
 
+        Nick2* getNick(int connectionId, const QString& nick);
+
         int columnCount(const QModelIndex& parent = QModelIndex()) const;
         int rowCount(const QModelIndex& parent = QModelIndex()) const;
         QPersistentModelIndex serverIndex(int connectionId);

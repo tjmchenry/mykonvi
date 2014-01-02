@@ -16,6 +16,7 @@
 #include "config/preferences.h"
 #include "ignore.h"
 #include "highlight.h"
+#include "servergroupmodel.h"
 
 #include <QFileInfo>
 #include <QHashIterator>
@@ -71,7 +72,9 @@ Preferences::Preferences()
     channel.setName("#konversation");
     serverGroup->addChannel(channel);
     serverGroup->setExpanded(false);
-    mServerGroupHash.insert(0, serverGroup);
+
+    mServerGroupModel = new ServerGroupModel();
+    mServerGroupModel->addServerGroup(serverGroup->id(), serverGroup);
     mQuickButtonList = defaultQuickButtonList();
     mAutoreplaceList = defaultAutoreplaceList();
 }
@@ -84,7 +87,17 @@ Preferences::~Preferences()
 }
 const Konversation::ServerGroupHash Preferences::serverGroupHash()
 {
-    return self()->mServerGroupHash;
+    return self()->mServerGroupModel->getServerGroupHash();
+}
+
+const Konversation::ServerGroupList Preferences::serverGroupList()
+{
+    return self()->mServerGroupModel->getServerGroupList();
+}
+
+ServerGroupModel* Preferences::serverGroupModel()
+{
+    return self()->mServerGroupModel;
 }
 
 const QStringList Preferences::defaultQuickButtonList()
@@ -141,28 +154,30 @@ void Preferences::clearAutoreplaceList()
 
 // --------------------------- AutoReplace ---------------------------
 
-void Preferences::setServerGroupHash(const Konversation::ServerGroupHash& hash)
+void Preferences::setServerGroupList(const Konversation::ServerGroupList& list)
 {
-    self()->mServerGroupHash.clear();
-    self()->mServerGroupHash = hash;
+    self()->mServerGroupModel->setServerGroupList(list);
 }
 
 void Preferences::addServerGroup(Konversation::ServerGroupSettingsPtr serverGroup)
 {
-    Konversation::ServerGroupHash hash = self()->mServerGroupHash;
-    hash.insert(serverGroup->id(), serverGroup);
-    self()->mServerGroupHash = hash;
+    self()->mServerGroupModel->addServerGroup(serverGroup->id(), serverGroup);
 }
 
 const Konversation::ServerGroupSettingsPtr Preferences::serverGroupById(int id)
 {
-    return  self()->mServerGroupHash.value(id);
+    return self()->mServerGroupModel->getServerGroupById(id);
+}
+
+const Konversation::ServerGroupSettingsPtr Preferences::serverGroupByIndex(int index)
+{
+    return self()->mServerGroupModel->getServerGroupByIndex(index);
 }
 
 const QList<Konversation::ServerGroupSettingsPtr> Preferences::serverGroupsByServer(const QString& server)
 {
     QList<Konversation::ServerGroupSettingsPtr> serverGroups;
-    QHashIterator<int, Konversation::ServerGroupSettingsPtr> it(self()->mServerGroupHash);
+    QHashIterator<int, Konversation::ServerGroupSettingsPtr> it(self()->mServerGroupModel->getServerGroupHash());
     while(it.hasNext())
     {
         it.next();
@@ -178,7 +193,7 @@ const QList<Konversation::ServerGroupSettingsPtr> Preferences::serverGroupsBySer
 QList<int> Preferences::serverGroupIdsByName(const QString& serverGroup)
 {
     QList<int> serverIds;
-    QHashIterator<int, Konversation::ServerGroupSettingsPtr> it(self()->mServerGroupHash);
+    QHashIterator<int, Konversation::ServerGroupSettingsPtr> it(self()->mServerGroupModel->getServerGroupHash());
     while(it.hasNext())
     {
         if(it.next().value()->name().toLower() == serverGroup.toLower())
@@ -192,7 +207,7 @@ QList<int> Preferences::serverGroupIdsByName(const QString& serverGroup)
 
 bool Preferences::isServerGroup(const QString& server)
 {
-    QHashIterator<int, Konversation::ServerGroupSettingsPtr> it(self()->mServerGroupHash);
+    QHashIterator<int, Konversation::ServerGroupSettingsPtr> it(self()->mServerGroupModel->getServerGroupHash());
     while(it.hasNext())
     {
         if(it.next().value()->name().toLower() == server.toLower())
@@ -203,9 +218,8 @@ bool Preferences::isServerGroup(const QString& server)
 
 void Preferences::removeServerGroup(int id)
 {
-    self()->mServerGroupHash.remove(id);
+    self()->mServerGroupModel->removeServerGroup(id);
 }
-
 
 const QList<Highlight*> Preferences::highlightList()
 {
@@ -262,77 +276,6 @@ bool Preferences::isIgnored(const QString &nickname)
             return true;
         }
     }
-
-    return false;
-}
-
-void Preferences::setNotifyList(const QMap<int, QStringList> &newList)
-{ self()->mNotifyList=newList; }
-
-const QMap<int, QStringList> Preferences::notifyList() { return self()->mNotifyList; }
-
-const QStringList Preferences::notifyListByGroupId(int serverGroupId)
-{
-    return self()->mNotifyList.value(serverGroupId);
-}
-
-const QString Preferences::notifyStringByGroupId(int serverGroupId)
-{
-    return notifyListByGroupId(serverGroupId).join(" ");
-}
-
-bool Preferences::addNotify(int serverGroupId, const QString& newPattern)
-{
-    QStringList& list = self()->mNotifyList[serverGroupId];
-
-    if (!list.contains(newPattern, Qt::CaseInsensitive))
-    {
-        list.append(newPattern);
-
-        if (list.size() == 1)
-            emit self()->notifyListStarted(serverGroupId);
-
-        return true;
-    }
-
-    return false;
-}
-
-bool Preferences::removeNotify(int serverGroupId, const QString& pattern)
-{
-    if (self()->mNotifyList.contains(serverGroupId))
-    {
-        QString lowered = pattern.toLower();
-        QStringList& oldList = self()->mNotifyList[serverGroupId];
-        QStringList newList;
-
-        for (int i = 0; i < oldList.size(); ++i)
-        {
-            const QString& nick = oldList[i];
-
-            if (nick.toLower() != lowered)
-                newList << nick;
-        }
-
-        if (newList.size() < oldList.size())
-        {
-            if (newList.isEmpty())
-                self()->mNotifyList.remove(serverGroupId);
-            else
-                self()->mNotifyList[serverGroupId] = newList;
-
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool Preferences::isNotify(int serverGroupId, const QString& pattern)
-{
-    if (self()->mNotifyList.contains(serverGroupId))
-        if (self()->mNotifyList.value(serverGroupId).contains(pattern, Qt::CaseInsensitive))
-            return true;
 
     return false;
 }

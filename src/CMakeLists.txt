@@ -62,11 +62,11 @@ set (irc_SRCS
     irc/outputfilter.cpp
     irc/outputfilterresolvejob.cpp
     irc/ircqueue.cpp
+    irc/servergroupmodel.cpp
     irc/servergroupdialog.cpp
     irc/servergroupsettings.cpp
     irc/serverison.cpp
     irc/serverlistdialog.cpp
-    irc/serverlistview.cpp
     irc/serversettings.cpp
 )
 

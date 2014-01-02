@@ -92,7 +92,7 @@ namespace Konversation
     void ServerGroupDialog::setServerGroupSettings(ServerGroupSettingsPtr settings)
     {
         m_id = settings->id();
-        m_sortIndex = settings->sortIndex();
+        m_notifyList = settings->notifyList();
         m_expanded = settings->expanded();
         m_enableNotifications = settings->enableNotifications();
         m_mainWidget->m_nameEdit->setText(settings->name());
@@ -127,7 +127,7 @@ namespace Konversation
     ServerGroupSettingsPtr ServerGroupDialog::serverGroupSettings()
     {
         ServerGroupSettingsPtr settings(new ServerGroupSettings(m_id));
-        settings->setSortIndex(m_sortIndex);
+        settings->setNotifyList(m_notifyList);
         settings->setName(m_mainWidget->m_nameEdit->text());
         IdentityList identities = Preferences::identityList();
         settings->setIdentityId(identities[m_mainWidget->m_identityCBox->currentIndex()]->id());

@@ -15,28 +15,17 @@
 
 #include "common.h"
 #include "servergroupsettings.h"
-#include "serverlistview.h"
+#include "servergroupmodel.h"
 #include "ui_serverlistdialogui.h"
 #include <kdialog.h>
 
+#include <QSortFilterProxyModel>
+
 class ConnectionSettings;
-class QTreeWidgetItem;
 class QCheckBox;
 
 namespace Konversation
 {
-    class ServerListItem : public QTreeWidgetItem
-    {
-        public:
-            ServerListItem(QTreeWidget* tree, QStringList & strings);
-            ServerListItem(QTreeWidgetItem* parent, QStringList & strings);
-            bool operator<(const QTreeWidgetItem &other) const;
-            enum DataRole
-            {
-                SortIndex = Qt::UserRole + 2
-            };
-    };
-
     class ServerListDialog : public KDialog, private Ui::ServerListDialogUI
     {
         Q_OBJECT
@@ -44,16 +33,6 @@ namespace Konversation
         public:
             explicit ServerListDialog(const QString& title, QWidget *parent = 0);
             ~ServerListDialog();
-            enum DataRole
-            {
-                ServerGroupId = Qt::UserRole + 1,
-                SortIndex = Qt::UserRole + 2,
-                IsServer = Qt::UserRole + 3,
-                ServerId = Qt::UserRole + 4
-            };
-
-        public slots:
-            void updateServerList();
 
         signals:
             void connectTo(Konversation::ConnectionFlag flag, int serverGroupId);
@@ -67,30 +46,20 @@ namespace Konversation
             void slotEdit();
             void slotDelete();
 
-            void slotSetGroupExpanded(QTreeWidgetItem* item);
-            void slotSetGroupCollapsed(QTreeWidgetItem* item);
-
-            void slotAboutToMove();
-            void slotMoved();
+            void slotSetGroupExpanded(const QModelIndex& index);
+            void slotSetGroupCollapsed(const QModelIndex& index);
 
             void updateButtons();
 
             void setShowAtStartup(bool show);
 
         protected:
-            QTreeWidgetItem* insertServerGroup(ServerGroupSettingsPtr serverGroup);
             void addServerGroup(ServerGroupSettingsPtr serverGroup);
 
-            int m_lastSortColumn;
-            Qt::SortOrder m_lastSortOrder;
-
         private:
-            int selectedChildrenCount(QTreeWidgetItem* item);
+            int selectedChildrenCount(const QModelIndex& parent);
 
-            bool m_selectedItem;
-            int m_selectedServerGroupId;
-            ServerSettings m_selectedServer;
-            QTreeWidgetItem* m_selectedItemPtr;
+            ServerGroupFilterModel* m_serverModel;
 
     };
 }

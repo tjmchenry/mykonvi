@@ -392,8 +392,8 @@ void Server::connectSignals()
     // Stats
     connect(this, SIGNAL(sentStat(int,int)), SLOT(collectStats(int,int)));
 
-    connect(Preferences::self(), SIGNAL(notifyListStarted(int)),
-        this, SLOT(notifyListStarted(int)), Qt::QueuedConnection);
+    //connect(Preferences::self(), SIGNAL(notifyListStarted(int)),
+    //    this, SLOT(notifyListStarted(int)), Qt::QueuedConnection);
 }
 
 int Server::getPort()
@@ -3119,30 +3119,12 @@ void Server::removeChannelNick(const QString& channelName, const QString& nickna
 
 QStringList Server::getWatchList()
 {
-    // no nickinfo ISON for the time being
-    if (getServerGroup())
-        return Preferences::notifyListByGroupId(getServerGroup()->id());
-    else
-        return QStringList();
-
-    if (m_serverISON)
-        return m_serverISON->getWatchList();
-    else
-        return QStringList();
+    return QStringList();
 }
 
 QStringList Server::getISONList()
 {
-    // no nickinfo ISON for the time being
-    if (getServerGroup())
-        return Preferences::notifyListByGroupId(getServerGroup()->id());
-    else
-        return QStringList();
-
-    if (m_serverISON)
-        return m_serverISON->getISONList();
-    else
-        return QStringList();
+    return QStringList();
 }
 
 QString Server::getISONListString() { return getISONList().join(" "); }
@@ -3152,13 +3134,7 @@ QString Server::getISONListString() { return getISONList().join(" "); }
  */
 bool Server::isWatchedNick(const QString& nickname)
 {
-    // no nickinfo ISON for the time being
-    if (getServerGroup())
-        return Preferences::isNotify(getServerGroup()->id(), nickname);
-    else
-        return false;
-
-    return getWatchList().contains(nickname, Qt::CaseInsensitive);
+    return false;
 }
 
 /**

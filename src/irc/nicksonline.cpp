@@ -516,7 +516,7 @@ void NicksOnline::updateNotifyList()
     notifyList.insert(networkRoot->data(0, Qt::UserRole).toInt(), nicks);
   }
   // update notify list
-  Preferences::setNotifyList(notifyList);
+  //Preferences::setNotifyList(notifyList);
   // save notify list
   static_cast<Application*>(kapp)->saveOptions(false);
 }
@@ -1014,8 +1014,8 @@ void NicksOnline::slotNickInfoChanged(Server* server, const NickInfoPtr nickInfo
  */
 void NicksOnline::slotAddNickname(int serverGroupId, const QString& nickname)
 {
-    Preferences::addNotify(serverGroupId, nickname);
-    static_cast<Application*>(kapp)->saveOptions(true);
+    //Preferences::addNotify(serverGroupId, nickname);
+    //static_cast<Application*>(kapp)->saveOptions(true);
 }
 
 /**

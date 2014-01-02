@@ -17,6 +17,7 @@
 #define PREFERENCES_H
 
 #include "servergroupsettings.h"
+#include <servergroupmodel.h>
 #include "identity.h"
 #include "preferences_base.h"
 
@@ -55,9 +56,12 @@ class Preferences : public PreferencesBase
             ChatWinAppearancePage
         };
         static const Konversation::ServerGroupHash serverGroupHash();
-        static void setServerGroupHash(const Konversation::ServerGroupHash& hash);
+        static const Konversation::ServerGroupList serverGroupList();
+        static ServerGroupModel* serverGroupModel();
+        static void setServerGroupList(const Konversation::ServerGroupList& list);
         static void addServerGroup(Konversation::ServerGroupSettingsPtr serverGroup);
         static const Konversation::ServerGroupSettingsPtr serverGroupById(int id);
+        static const Konversation::ServerGroupSettingsPtr serverGroupByIndex(int index);
         static const QList<Konversation::ServerGroupSettingsPtr> serverGroupsByServer(const QString& server);
         static QList<int> serverGroupIdsByName(const QString& serverGroup);
         static bool isServerGroup(const QString& server);
@@ -65,15 +69,6 @@ class Preferences : public PreferencesBase
 
         /** Returns a list of alias set up by default.  This is a set of aliases for the scripts found. */
         static QStringList defaultAliasList();
-
-        //notifylist is in kconfigxt - FIXME
-        static const QMap<int, QStringList> notifyList();
-        static void setNotifyList(const QMap<int, QStringList>& newList);
-        static const QStringList notifyListByGroupId(int serverGroupId);
-        static const QString notifyStringByGroupId(int serverGroupId);
-        static bool addNotify(int serverGroupId, const QString& newPattern);
-        static bool removeNotify(int serverGroupId, const QString& pattern);
-        static bool isNotify(int serverGroupId, const QString& pattern);
 
         static const QList<Highlight*> highlightList();
         static void setHighlightList(QList<Highlight*> newList);
@@ -138,16 +133,14 @@ class Preferences : public PreferencesBase
         static void slotSetUseOSD(bool use);
 
     signals:
-        void notifyListStarted(int serverGroupId);
         void updateTrayIcon();
 
     protected:
         IdentityPtr mIdentity;
-        Konversation::ServerGroupHash mServerGroupHash;
+        ServerGroupModel* mServerGroupModel;
         QList<Ignore*> mIgnoreList;
         QList<IdentityPtr> mIdentityList;
         QList<Highlight*> mHighlightList;
-        QMap<int, QStringList> mNotifyList;  // network id, list of nicks
         QMap< int,QMap<QString,QString> > mChannelEncodingsMap;  // mChannelEncodingsMap[serverGroupdId][channelName]
         QHash<Konversation::ServerGroupSettingsPtr, QHash<QString, QString> > mServerGroupSpellCheckingLanguages;
         QHash<QString, QHash<QString, QString> > mServerSpellCheckingLanguages;

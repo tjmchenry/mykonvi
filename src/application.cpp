@@ -450,36 +450,33 @@ void Application::readOptions()
 
     // Read the new server settings
     QStringList groups = KGlobal::config()->groupList().filter(QRegExp("ServerGroup [0-9]+"));
-    QMap<int,QStringList> notifyList;
     QList<int> sgKeys;
 
     if(!groups.isEmpty())
     {
-        Konversation::ServerGroupHash serverGroups;
-        QStringList::iterator it;
+        Konversation::ServerGroupList serverGroups;
+        QStringList::const_iterator it;
         QStringList tmp1;
-        QStringList::iterator it2;
+        QStringList::const_iterator it2;
         int index = 0;
         Konversation::ChannelList channelHistory;
         Konversation::ServerSettings server;
         Konversation::ChannelSettings channel;
 
-        for (it = groups.begin(); it != groups.end(); ++it)
+        for (it = groups.constBegin(); it != groups.constEnd(); ++it)
         {
             KConfigGroup cgServerGroup(KGlobal::config()->group(*it));
             Konversation::ServerGroupSettingsPtr serverGroup(new Konversation::ServerGroupSettings);
             serverGroup->setName(cgServerGroup.readEntry("Name"));
-            serverGroup->setSortIndex(index);
             serverGroup->setIdentityId(Preferences::identityByName(cgServerGroup.readEntry("Identity"))->id());
             serverGroup->setConnectCommands(cgServerGroup.readEntry("ConnectCommands"));
             serverGroup->setAutoConnectEnabled(cgServerGroup.readEntry("AutoConnect", false));
             serverGroup->setNotificationsEnabled(cgServerGroup.readEntry("EnableNotifications", true));
             serverGroup->setExpanded(cgServerGroup.readEntry("Expanded", false));
-
-            notifyList.insert((*serverGroup).id(), cgServerGroup.readEntry("NotifyList", QString()).split(' ', QString::SkipEmptyParts));
+            serverGroup->setNotifyList(cgServerGroup.readEntry("NotifyList", QString()).split(' ', QString::SkipEmptyParts));
 
             tmp1 = cgServerGroup.readEntry("ServerList", QStringList());
-            for (it2 = tmp1.begin(); it2 != tmp1.end(); ++it2)
+            for (it2 = tmp1.constBegin(); it2 != tmp1.constEnd(); ++it2)
             {
                 KConfigGroup cgServer(KGlobal::config()->group(*it2));
                 server.setHost(cgServer.readEntry("Server"));
@@ -492,7 +489,7 @@ void Application::readOptions()
             //config->setGroup((*it));
             tmp1 = cgServerGroup.readEntry("AutoJoinChannels", QStringList());
 
-            for (it2 = tmp1.begin(); it2 != tmp1.end(); ++it2)
+            for (it2 = tmp1.constBegin(); it2 != tmp1.constEnd(); ++it2)
             {
                 KConfigGroup cgJoin(KGlobal::config()->group(*it2));
 
@@ -508,7 +505,7 @@ void Application::readOptions()
             tmp1 = cgServerGroup.readEntry("ChannelHistory", QStringList());
             channelHistory.clear();
 
-            for (it2 = tmp1.begin(); it2 != tmp1.end(); ++it2)
+            for (it2 = tmp1.constBegin(); it2 != tmp1.constEnd(); ++it2)
             {
                 KConfigGroup cgChanHistory(KGlobal::config()->group(*it2));
 
@@ -523,17 +520,16 @@ void Application::readOptions()
 
             serverGroup->setChannelHistory(channelHistory);
 
-            serverGroups.insert(serverGroup->id(), serverGroup);
+            serverGroups.append(serverGroup);
             sgKeys.append(serverGroup->id());
 
             index++;
         }
 
-        Preferences::setServerGroupHash(serverGroups);
+        Preferences::setServerGroupList(serverGroups);
     }
 
-    // Notify Settings and lists.  Must follow Server List.
-    Preferences::setNotifyList(notifyList);
+    // Notify Settings.  Must follow Server List.
     Preferences::self()->setNotifyDelay(Preferences::self()->notifyDelay());
     Preferences::self()->setUseNotify(Preferences::self()->useNotify());
 
@@ -815,20 +811,8 @@ void Application::saveOptions(bool updateGUI)
     }
 
     // Add the new servergroups to the config
+    Konversation::ServerGroupList serverGroupList = Preferences::serverGroupList();
     Konversation::ServerGroupHash serverGroupHash = Preferences::serverGroupHash();
-    QHashIterator<int, Konversation::ServerGroupSettingsPtr> hashIt(serverGroupHash);
-
-    QMap<int, Konversation::ServerGroupSettingsPtr> sortedServerGroupMap;
-
-    // Make the indices in the group headers reflect the server list dialog sorting.
-    while (hashIt.hasNext())
-    {
-        hashIt.next();
-
-        sortedServerGroupMap.insert(hashIt.value()->sortIndex(), hashIt.value());
-    }
-
-    QMapIterator<int, Konversation::ServerGroupSettingsPtr> it(sortedServerGroupMap);
 
     index = 0;
     int index2 = 0;
@@ -840,23 +824,23 @@ void Application::saveOptions(bool updateGUI)
     width = QString(width).length();
     QString groupName;
     QStringList servers;
-    Konversation::ServerList::iterator it2;
+    Konversation::ServerGroupList::const_iterator it;
+    Konversation::ServerList::const_iterator it2;
     Konversation::ServerList serverlist;
     Konversation::ChannelList channelList;
-    Konversation::ChannelList::iterator it3;
+    Konversation::ChannelList::const_iterator it3;
     QStringList channels;
     QStringList channelHistory;
     QList<int> sgKeys;
 
-    while(it.hasNext())
+    for (it = serverGroupList.constBegin(); it != serverGroupList.constEnd(); ++it)
     {
-        it.next();
-        serverlist = (it.value())->serverList();
+        serverlist = (*it)->serverList();
         servers.clear();
 
-        sgKeys.append(it.value()->id());
+        sgKeys.append((*it)->id());
 
-        for(it2 = serverlist.begin(); it2 != serverlist.end(); ++it2)
+        for(it2 = serverlist.constBegin(); it2 != serverlist.constEnd(); ++it2)
         {
             groupName = QString("Server %1").arg(index2);
             servers.append(groupName);
@@ -868,10 +852,10 @@ void Application::saveOptions(bool updateGUI)
             index2++;
         }
 
-        channelList = it.value()->channelList();
+        channelList = (*it)->channelList();
         channels.clear();
 
-        for(it3 = channelList.begin(); it3 != channelList.end(); ++it3)
+        for(it3 = channelList.constBegin(); it3 != channelList.constEnd(); ++it3)
         {
             groupName = QString("Channel %1").arg(index3);
             channels.append(groupName);
@@ -881,10 +865,10 @@ void Application::saveOptions(bool updateGUI)
             index3++;
         }
 
-        channelList = it.value()->channelHistory();
+        channelList = (*it)->channelHistory();
         channelHistory.clear();
 
-        for(it3 = channelList.begin(); it3 != channelList.end(); ++it3)
+        for(it3 = channelList.constBegin(); it3 != channelList.constEnd(); ++it3)
         {   // TODO FIXME: is it just me or is this broken?
             groupName = QString("Channel %1").arg(index3);
             channelHistory.append(groupName);
@@ -897,16 +881,16 @@ void Application::saveOptions(bool updateGUI)
 
         QString sgn = QString("ServerGroup %1").arg(QString::number(index).rightJustified(width,'0'));
         KConfigGroup cgServerGroup(KGlobal::config()->group(sgn));
-        cgServerGroup.writeEntry("Name", it.value()->name());
-        cgServerGroup.writeEntry("Identity", it.value()->identity()->getName());
+        cgServerGroup.writeEntry("Name", (*it)->name());
+        cgServerGroup.writeEntry("Identity", (*it)->identity()->getName());
         cgServerGroup.writeEntry("ServerList", servers);
         cgServerGroup.writeEntry("AutoJoinChannels", channels);
-        cgServerGroup.writeEntry("ConnectCommands", it.value()->connectCommands());
-        cgServerGroup.writeEntry("AutoConnect", it.value()->autoConnectEnabled());
+        cgServerGroup.writeEntry("ConnectCommands", (*it)->connectCommands());
+        cgServerGroup.writeEntry("AutoConnect", (*it)->autoConnectEnabled());
         cgServerGroup.writeEntry("ChannelHistory", channelHistory);
-        cgServerGroup.writeEntry("EnableNotifications", it.value()->enableNotifications());
-        cgServerGroup.writeEntry("Expanded", it.value()->expanded());
-        cgServerGroup.writeEntry("NotifyList",Preferences::notifyStringByGroupId(it.value()->id()));
+        cgServerGroup.writeEntry("EnableNotifications", (*it)->enableNotifications());
+        cgServerGroup.writeEntry("Expanded", (*it)->expanded());
+        cgServerGroup.writeEntry("NotifyList", (*it)->notifyList().join(" "));
         index++;
     }
 

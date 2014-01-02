@@ -678,7 +678,7 @@ void IrcContextMenus::processNickAction(int actionId, Server* server, const QStr
             if (!server->getServerGroup()) break;
 
             foreach(const QString& nick, nicks)
-                Preferences::addNotify(server->getServerGroup()->id(), nick);
+                server->getServerGroup()->addNotify(nick);
 
             break;
         }
@@ -687,7 +687,7 @@ void IrcContextMenus::processNickAction(int actionId, Server* server, const QStr
             if (!server->getServerGroup()) break;
 
             foreach(const QString& nick, nicks)
-                Preferences::removeNotify(server->getServerGroup()->id(), nick);
+                server->getServerGroup()->removeNotify(nick);
 
             break;
         }
@@ -845,7 +845,7 @@ void IrcContextMenus::updateSharedNickSettingsActions(Server* server, const QStr
 
         if (serverGroupId != -1)
         {
-            if (Preferences::isNotify(serverGroupId, nick))
+            if (server->getServerGroup()->isNotify(nick))
                 ++removeNotifyCounter;
             else
                 ++addNotifyCounter;

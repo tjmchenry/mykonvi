@@ -54,6 +54,7 @@ namespace Konversation
     class ServerGroupSettings;
     typedef KSharedPtr<ServerGroupSettings> ServerGroupSettingsPtr;
     typedef QHash<int,ServerGroupSettingsPtr> ServerGroupHash;
+    typedef QList<ServerGroupSettingsPtr> ServerGroupList;
     typedef QList<ServerSettings> ServerList;
     typedef QList<ChannelSettings> ChannelList;
 
@@ -73,10 +74,22 @@ namespace Konversation
 
             void setServerList(const ServerList& list);
             void addServer(const ServerSettings& settings) { m_serverList.append(settings); }
+            void insertServer(int index, const ServerSettings& settings) { m_serverList.insert(index, settings); }
+            void moveServer(int from, int to) { m_serverList.move(from, to); }
             void removeServer(const ServerSettings& settings);
+            void removeServerByIndex(int index);
             ServerList serverList() const { return m_serverList; }
             ServerSettings serverByIndex(int index) const;
 
+            void setNotifyList(const QStringList& list);
+            void addNotify(const QString& nick) { m_notifyList.append(nick); }
+            void insertNotify(int index, const QString& nick) { m_notifyList.insert(index, nick); }
+            void moveNotify(int from, int to) { m_notifyList.move(from, to); }
+            void removeNotify(const QString& nick);
+            void removeNotifyByIndex(int index);
+            bool isNotify(const QString& nick) const { return m_notifyList.contains(nick); }
+            QStringList notifyList() const { return m_notifyList; }
+            QString notifyByIndex(int index) const;
 
             void setIdentityId(int identityId) { m_identityId = identityId; }
             int identityId() const { return m_identityId; }
@@ -85,6 +98,9 @@ namespace Konversation
             void setChannelList(const ChannelList& list);
             void addChannel(const ChannelSettings& channel) { m_channelList.append(channel); }
             void addChannel(const ChannelSettings& channel, const ChannelSettings& before);
+            //FIXME not sure if these will work, do the tabs (or anything) rely on indexes staying the same?
+            void insertChannel(int index, const ChannelSettings& channel) { m_channelList.insert(index, channel); }
+            void moveChannel(int from, int to) { m_channelList.move(from, to); }
             void removeChannel(const ChannelSettings& channel);
             ChannelList channelList() const { return m_channelList; }
             ChannelSettings channelByIndex(int index) const;
@@ -96,9 +112,6 @@ namespace Konversation
             bool autoConnectEnabled() const { return m_autoConnect; }
 
             int id() const { return m_id; }
-
-            void setSortIndex(int sortIndex) { m_sortIndex = sortIndex; }
-            int sortIndex() const { return m_sortIndex; }
 
             void clearChannelHistory();
             void setChannelHistory(const ChannelList& list) { m_channelHistory = list; }
@@ -114,9 +127,9 @@ namespace Konversation
 
         private:
             static int s_availableId;
-            int m_sortIndex;
             QString m_name;
             ServerList m_serverList;
+            QStringList m_notifyList;
             int m_identityId;
             ChannelList m_channelList;
             ChannelList m_channelHistory;

@@ -167,8 +167,7 @@ void ServerISON::recalculateAddressees()
         // Merge with watch list from prefs, eliminating dups (case insensitive).
         // TODO: Don't add nick on user watch list if nick is known to be online
         // under a different nickname?
-        QStringList prefsWatchList =
-            Preferences::notifyListByGroupId(m_server->getServerGroup()->id());
+        QStringList prefsWatchList = QStringList(); // Preferences::notifyListByGroupId(m_server->getServerGroup()->id());
         QStringList::iterator itEnd = prefsWatchList.end();
 
         for(QStringList::iterator it = prefsWatchList.begin(); it != itEnd; ++it)

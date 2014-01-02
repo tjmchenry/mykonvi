@@ -191,6 +191,14 @@ void NickListModel::removeAllNicksFromChannel(int connectionId, const QString& c
     }
 }
 
+Nick2* NickListModel::getNick(int connectionId, const QString& nick)
+{
+    if (m_servers.contains(connectionId) && m_nickHashes[connectionId].contains(nick))
+        return m_nickHashes[connectionId][nick];
+
+    return 0;
+}
+
 QPersistentModelIndex NickListModel::serverIndex(int connectionId)
 {
     if (m_servers.contains(connectionId))

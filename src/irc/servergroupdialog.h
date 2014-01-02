@@ -70,7 +70,7 @@ namespace Konversation
             bool m_enableNotifications;
             bool m_configBacked;
             int m_id;
-            int m_sortIndex;
+            QStringList m_notifyList;
 
             bool m_identitiesNeedsUpdate;
 

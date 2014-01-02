@@ -1263,7 +1263,7 @@ namespace Konversation
         QStringList added;
         QStringList removed;
 
-        if (!input.parameter.isEmpty() && serverGroupId != -1)
+        /*if (!input.parameter.isEmpty() && serverGroupId != -1)
         {
             QStringList list = input.parameter.split(' ', QString::SkipEmptyParts);
 
@@ -1280,9 +1280,9 @@ namespace Konversation
                 else
                     removed << list[index];
             }
-        }
+        }*/
 
-        QString list = Preferences::notifyListByGroupId(serverGroupId).join(", ");
+        QString list = QString(); // Preferences::notifyListByGroupId(serverGroupId).join(", ");
 
         if (list.isEmpty())
         {

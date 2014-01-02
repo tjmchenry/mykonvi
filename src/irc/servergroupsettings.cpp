@@ -12,6 +12,7 @@
 
 #include "servergroupsettings.h"
 #include "application.h"
+#include <map>
 
 
 namespace Konversation
@@ -24,7 +25,6 @@ namespace Konversation
     {
         m_id = s_availableId;
         s_availableId++;
-        m_sortIndex = m_id;
         m_autoConnect = false;
         m_identityId = 0;
         m_enableNotifications = true;
@@ -44,7 +44,6 @@ namespace Konversation
             m_id = id;
         }
 
-        m_sortIndex = m_id;
         m_autoConnect = false;
         m_identityId = 0;
         m_enableNotifications = true;
@@ -69,7 +68,6 @@ namespace Konversation
         setNotificationsEnabled(settings.enableNotifications());
         setExpanded(settings.expanded());
         m_id = settings.id();
-        m_sortIndex = settings.sortIndex();
         return *this;
     }
 
@@ -79,7 +77,6 @@ namespace Konversation
         setName(name);
         m_id = s_availableId;
         s_availableId++;
-        m_sortIndex = m_id;
         m_autoConnect = false;
         m_identityId = 0;
         m_enableNotifications = true;
@@ -101,16 +98,47 @@ namespace Konversation
         m_serverList.removeOne(settings);
     }
 
+    void ServerGroupSettings::removeServerByIndex(int index)
+    {
+        m_serverList.removeAt(index);
+    }
+
     ServerSettings ServerGroupSettings::serverByIndex(int index) const
     {
-        ServerList servers = serverList();
-
-        if(index < servers.count())
+        if(m_serverList.count() > index)
         {
-            return servers[index];
+            return m_serverList[index];
         }
 
         return ServerSettings();
+    }
+
+    void ServerGroupSettings::setNotifyList(const QStringList& list)
+    {
+        m_notifyList.clear();
+        m_notifyList = list;
+    }
+
+    void ServerGroupSettings::removeNotify(const QString& nick)
+    {
+        m_notifyList.removeOne(nick);
+    }
+
+    void ServerGroupSettings::removeNotifyByIndex(int index)
+    {
+        m_notifyList.removeAt(index);
+    }
+
+    QString ServerGroupSettings::notifyByIndex(int index) const
+    {
+        QStringList nicks = notifyList();
+
+        if (index < nicks.count())
+        {
+            return nicks[index];
+        }
+
+        return QString();
     }
 
     void ServerGroupSettings::setChannelList(const ChannelList& list)

@@ -830,8 +830,8 @@ void MainWindow::openIdentitiesDialog()
     QPointer<Konversation::IdentityDialog> dlg = new Konversation::IdentityDialog(this);
     if (dlg->exec() == KDialog::Accepted)
     {
-        if (m_serverListDialog)
-            m_serverListDialog->updateServerList();
+        //if (m_serverListDialog)
+        //    m_serverListDialog->updateServerList();
         m_viewContainer->updateViewEncoding(m_viewContainer->getFrontView());
     }
     delete dlg;
@@ -846,7 +846,7 @@ IdentityPtr MainWindow::editIdentity(IdentityPtr identity)
 
     if ((dlg->exec() == KDialog::Accepted) && m_serverListDialog)
     {
-        m_serverListDialog->updateServerList();
+        //m_serverListDialog->updateServerList();
         delete dlg;
         return newIdentity;
     }

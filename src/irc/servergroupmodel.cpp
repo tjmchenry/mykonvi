@@ -422,18 +422,25 @@ QVariant ServerGroupModel::data(const QModelIndex& index, int role) const
     if (!index.isValid() || index.row() >= rowCount(index.parent()))
         return QVariant();
 
-    if (index.parent().isValid() && m_serverGroupHash.contains(index.internalId()) && role == Qt::DisplayRole) // child item
+    if (index.parent().isValid() && m_serverGroupHash.contains(index.internalId())) // child item
     {
-        switch (index.column())
+        if (role == Qt::DisplayRole)
         {
-            case 0:
-                return m_serverGroupHash[index.internalId()]->serverByIndex(index.row()).host();
-            case 1:
-                return m_serverGroupHash[index.internalId()]->notifyByIndex(index.row());
-            case 2:
-                return m_serverGroupHash[index.internalId()]->channelByIndex(index.row()).name();
-            default:
-                return QVariant();
+            switch (index.column())
+            {
+                case 0:
+                    return m_serverGroupHash[index.internalId()]->serverByIndex(index.row()).host();
+                case 1:
+                    return m_serverGroupHash[index.internalId()]->notifyByIndex(index.row());
+                case 2:
+                    return m_serverGroupHash[index.internalId()]->channelByIndex(index.row()).name();
+                default:
+                    return QVariant();
+            }
+        }
+        else if (role == ServerGroupIdRole)
+        {
+            return index.internalId();
         }
     }
 
@@ -441,16 +448,23 @@ QVariant ServerGroupModel::data(const QModelIndex& index, int role) const
     {
         Konversation::ServerGroupSettingsPtr serverGroup = m_serverGroupList.at(index.row());
 
-        switch (index.column())
+        if (role == Qt::DisplayRole)
         {
-            case 0:
-                return serverGroup->name();
-            case 1:
-                return serverGroup->identity()->getName();
-            case 2:
-                return m_channelListHash[serverGroup->id()];
-            default:
-                return QVariant();
+            switch (index.column())
+            {
+                case 0:
+                    return serverGroup->name();
+                case 1:
+                    return serverGroup->identity()->getName();
+                case 2:
+                    return m_channelListHash[serverGroup->id()];
+                default:
+                    return QVariant();
+            }
+        }
+        else if (role == ServerGroupIdRole)
+        {
+            return serverGroup->id();
         }
     }
 

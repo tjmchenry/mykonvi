@@ -55,7 +55,6 @@ set (irc_SRCS
     irc/nickinfo.cpp
     irc/nicklistview.cpp
     irc/nicksonline.cpp
-    irc/nicksonlineitem.cpp
 
     #=== Server
     irc/inputfilter.cpp
@@ -71,6 +70,7 @@ set (irc_SRCS
 )
 
 kde4_add_ui_files(irc_SRCS
+    irc/nicksonlinepanelui.ui
     irc/channellistpanelui.ui
     irc/channeldialogui.ui
     irc/joinchannelui.ui

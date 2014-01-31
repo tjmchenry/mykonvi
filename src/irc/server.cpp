@@ -3134,6 +3134,11 @@ QString Server::getISONListString() { return getISONList().join(" "); }
  */
 bool Server::isWatchedNick(const QString& nickname)
 {
+    if (getServerGroup())
+    {
+        return getServerGroup()->notifyList().contains(nickname);
+    }
+
     return false;
 }
 

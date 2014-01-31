@@ -18,9 +18,9 @@
 
 NickListModel::NickListModel(QObject* parent) : QAbstractListModel(parent)
 {
-    //m_nickHashes = QHash<int, NickHash>();
-    //m_nickLists = QHash<int, QList<Nick2*> >();
-   // m_servers = QMap<int, QPersistentModelIndex>();
+    Application* konvApp = static_cast<Application*>(kapp);
+    m_connectionManager = konvApp->getConnectionManager();
+
     m_hostmask = false;
 
     Images* images = Application::instance()->images();
@@ -77,7 +77,7 @@ void NickListModel::addServer(int connectionId)
     m_servers[connectionId] = QPersistentModelIndex();
     m_nickHashes.insert(connectionId, NickHash());
     m_nickLists.insert(connectionId, QList<Nick2*>());
-    QMap<int, QPersistentModelIndex>::const_iterator i = m_servers.find(connectionId);
+    QMap<int, QPersistentModelIndex>::const_iterator i = m_servers.constFind(connectionId);
     int position = 0;
     while (i != m_servers.constBegin())
     {
@@ -109,6 +109,15 @@ void NickListModel::insertNick(int connectionId, Nick2* item)
         m_nickLists[connectionId].append(item);
         m_nickHashes[connectionId].insert(item->getNickname(), item);
         endInsertRows();
+
+        //TODO have nicks added on join through input filter instead of current channel/server
+        //mishmash. use signals / slots to connect them
+        if (isNotifyNick(connectionId, item->getNickname()))
+        {
+            //TODO this will need to be different for meta contacts..
+            int sgId = m_connectionManager->getServerByConnectionId(connectionId)->getServerGroup()->id();
+            emit nickOffline(sgId, connectionId, item->getNickname());
+        }
     }
 }
 
@@ -140,6 +149,14 @@ void NickListModel::removeNick(int connectionId, const QString& nick)
         m_nickHashes[connectionId].remove(nick);
         m_nickLists[connectionId].removeAt(position);
         endRemoveRows();
+
+        //TODO have nicks added on join through input filter instead of current channel/server
+        //mishmash. use signals / slots to connect them
+        if (isNotifyNick(connectionId, nick))
+        {
+            int sgId = m_connectionManager->getServerByConnectionId(connectionId)->getServerGroup()->id();
+            emit nickOffline(sgId, connectionId, nick);
+        }
     }
 }
 
@@ -286,8 +303,7 @@ QVariant NickListModel::data(const QModelIndex& index, int role) const
     {
         if (role == Qt::DisplayRole)
         {
-            Application* konvApp = static_cast<Application*>(kapp);
-            Server* server = konvApp->getConnectionManager()->getServerByConnectionId(index.internalId());
+            Server* server = m_connectionManager->getServerByConnectionId(index.internalId());
             if (server)
                 return server->getServerName();
             else
@@ -380,6 +396,16 @@ bool NickListModel::isNickOnline(int connectionId, const QString& nick) const
 {
     if (m_nickHashes.contains(connectionId))
         return m_nickHashes[connectionId].contains(nick);
+
+    return false;
+}
+
+bool NickListModel::isNotifyNick(int connectionId, const QString& nick) const
+{
+    Server* server = m_connectionManager->getServerByConnectionId(connectionId);
+
+    if (server)
+        return server->isWatchedNick(nick);
 
     return false;
 }

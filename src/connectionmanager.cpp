@@ -32,6 +32,8 @@ ConnectionManager::ConnectionManager(QObject* parent)
 //        m_overrideAutoReconnect = true;
 
     m_nickListModel = 0;
+    m_nicksOnlineModel = 0;
+
     connect(this, SIGNAL(requestReconnect(Server*)), this, SLOT(handleReconnect(Server*)));
 }
 
@@ -192,8 +194,20 @@ void ConnectionManager::handleConnectionStateChange(Server* server, Konversation
 
     int identityId = server->getIdentity()->id();
 
+    int sgId = -1;
+    int cId = server->connectionId();
+    if (server->getServerGroup())
+        sgId = server->getServerGroup()->id();
+
     if (state == Konversation::SSConnected)
     {
+        if (sgId >= 0 && !m_connectedServerGroups.contains(sgId, cId))
+        {
+            m_connectedServerGroups.insert(sgId, cId);
+
+            emit connectedServerGroupsChanged(sgId, cId);
+        }
+
         m_overrideAutoReconnect = false;
 
         if (!m_activeIdentities.contains(identityId))
@@ -205,12 +219,25 @@ void ConnectionManager::handleConnectionStateChange(Server* server, Konversation
     }
     else if (state != Konversation::SSConnecting)
     {
+        if (sgId >= 0 && m_connectedServerGroups.contains(sgId, cId))
+        {
+            m_connectedServerGroups.remove(sgId, cId);
+
+            emit connectedServerGroupsChanged(sgId, cId);
+        }
+
         if (m_activeIdentities.contains(identityId))
         {
             m_activeIdentities.remove(identityId);
 
             emit identityOffline(identityId);
         }
+    }
+    else if (sgId >= 0 && m_connectedServerGroups.contains(sgId, cId))
+    {
+        m_connectedServerGroups.remove(sgId, cId);
+
+        emit connectedServerGroupsChanged(sgId, cId);
     }
 
     if (state == Konversation::SSInvoluntarilyDisconnected && !m_overrideAutoReconnect)
@@ -677,9 +704,18 @@ Server* ConnectionManager::getServerByName(const QString& name, NameMatchFlags f
 NickListModel* ConnectionManager::getNickListModel()
 {
     if (!m_nickListModel)
+    {
         m_nickListModel = new NickListModel(this);
+        m_nicksOnlineModel = new NicksOnlineFilterModel(this);
+        m_nicksOnlineModel->setSourceModel(Preferences::serverGroupModel());
+    }
 
     return m_nickListModel;
+}
+
+NicksOnlineFilterModel* ConnectionManager::getNicksOnlineFilterModel()
+{
+    return m_nicksOnlineModel;
 }
 
 void ConnectionManager::involuntaryQuitServers()

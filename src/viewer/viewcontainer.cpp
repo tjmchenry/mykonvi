@@ -43,6 +43,7 @@
 
 #include <KInputDialog>
 #include <KMessageBox>
+#include <KMenu>
 #include <KRun>
 #include <KUrl>
 #include <KXMLGUIFactory>

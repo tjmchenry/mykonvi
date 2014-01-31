@@ -807,8 +807,9 @@ void MainWindow::openServerList()
 
         connect(m_serverListDialog, SIGNAL(serverGroupsChanged(Konversation::ServerGroupSettingsPtr)),
                 konvApp, SIGNAL(serverGroupsChanged(Konversation::ServerGroupSettingsPtr)));
-        connect(konvApp, SIGNAL(serverGroupsChanged(Konversation::ServerGroupSettingsPtr)),
-                m_serverListDialog, SLOT(updateServerList()));
+        //TODO verify this is unneeded
+        //connect(konvApp, SIGNAL(serverGroupsChanged(Konversation::ServerGroupSettingsPtr)),
+        //        m_serverListDialog, SLOT(updateServerList()));
         connect(m_serverListDialog, SIGNAL(connectTo(Konversation::ConnectionFlag,int)),
                 konvApp->getConnectionManager(), SLOT(connectTo(Konversation::ConnectionFlag,int)));
         connect(m_serverListDialog, SIGNAL(connectTo(Konversation::ConnectionFlag,ConnectionSettings)),

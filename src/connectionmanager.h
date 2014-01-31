@@ -14,6 +14,7 @@
 
 #include "server.h"
 #include "identity.h"
+#include "nicksonline.h"
 
 #include <QObject>
 #include <QSet>
@@ -21,6 +22,7 @@
 
 class ConnectionSettings;
 class NickListModel;
+class NicksOnlineFilterModel;
 
 class ConnectionManager : public QObject
 {
@@ -44,6 +46,10 @@ class ConnectionManager : public QObject
         Server* getServerByName(const QString& name, NameMatchFlags flags = MatchByName);
 
         NickListModel* getNickListModel();
+
+        NicksOnlineFilterModel* getNicksOnlineFilterModel();
+
+        QMultiHash<int, int> getConnectedServerGroups() { return m_connectedServerGroups; }
 
     public slots:
         void connectTo(Konversation::ConnectionFlag flag,
@@ -71,6 +77,8 @@ class ConnectionManager : public QObject
         void connectionChangedState(Server* server, Konversation::ConnectionState state);
 
         void connectionChangedAwayState(bool away);
+
+        void connectedServerGroupsChanged(int sgId, int cId);
 
         void requestReconnect(Server* server);
 
@@ -101,6 +109,8 @@ class ConnectionManager : public QObject
         bool validateIdentity(IdentityPtr identity, bool interactive = true);
 
         QMap<int, Server*> m_connectionList;
+        QMultiHash<int, int> m_connectedServerGroups;
+        NicksOnlineFilterModel* m_nicksOnlineModel;
         NickListModel* m_nickListModel;
         QSet<uint> m_activeIdentities;
         bool m_overrideAutoReconnect;

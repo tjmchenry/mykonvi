@@ -17,21 +17,24 @@
 #include "images.h"
 #include "nick2.h"
 #include "ircinput.h"
+#include "connectionmanager.h"
 
 #include <QSortFilterProxyModel>
 
 class Nick2;
 class Channel;
+class ConnectionManager;
 
 typedef QHash<QString, Nick2*> NickHash;
 
 Q_DECLARE_METATYPE(NickHash);
 
-enum Roles {NickRole = Qt::UserRole, HostmaskRole};
 
 class NickListModel : public QAbstractListModel
 {
     Q_OBJECT
+
+    enum Roles {NickRole = Qt::UserRole, HostmaskRole};
 
     public:
         explicit NickListModel(QObject *parent = 0);
@@ -65,6 +68,7 @@ class NickListModel : public QAbstractListModel
         bool hasChildren(const QModelIndex& index) const;
 
         bool isNickOnline(int connectionId, const QString& nick) const;
+        bool isNotifyNick(int cId, const QString& nick) const;
         bool isNickIdentified(int connectionId, const QString& nick) const;
         QStringList getNickChannels(int connectionId, const QString& nick) const;
         bool isNickInChannel(int connectionId, const QString& channel, const QString& nick) const;
@@ -89,11 +93,16 @@ class NickListModel : public QAbstractListModel
 
         void setHostmaskColumn(bool hostmask) { m_hostmask = hostmask; }
 
+    signals:
+        void nickOnline(int sgId, int connectionId, const QString& nick);
+        void nickOffline(int sgId, int connectionId, const QString& nick);
+
     private:
         QHash<int, QList<Nick2*> > m_nickLists;
         QHash<int, NickHash> m_nickHashes;
         QMap<int, QPersistentModelIndex> m_servers;
         int m_connectionId;
+        ConnectionManager* m_connectionManager;
         bool m_hostmask;
         QString m_whatsThis;
         QTimer* m_delayedResetTimer;

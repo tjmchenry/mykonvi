@@ -17,9 +17,10 @@
 #include <QAbstractListModel>
 #include <QSortFilterProxyModel>
 
+
 class ServerGroupModel : public QAbstractListModel
 {
-    enum Roles {IsServer = Qt::UserRole};
+    enum Roles {ServerGroupIdRole = Qt::UserRole};
 
     public:
         ServerGroupModel(QObject* parent = 0);

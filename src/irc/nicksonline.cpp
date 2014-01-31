@@ -1,5 +1,3 @@
-// -*- mode: c++; c-file-style: "bsd"; c-basic-offset: 4; tabs-width: 4; indent-tabs-mode: nil -*-
-
 /*
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -8,1071 +6,772 @@
 */
 
 /*
-  shows a user tree of friends per server
-  begin:     Sam Aug 31 2002
-  copyright: (C) 2002 by Dario Abatianni
-  email:     eisfuchs@tigress.com
+  Copyright (C) 2002 Dario Abatianni <eisfuchs@tigress.com>
+  Copyright (C) 2014 Travis McHenry <me@travisjmchenry.com>
 */
 
 #include "nicksonline.h"
-#include <QHelpEvent>
-#include "channel.h"
-#include "server.h"
+
 #include "application.h"
-#include "connectionmanager.h"
-#include "editnotifydialog.h"
 #include "images.h"
-#include "query.h"
-#include "linkaddressbook/linkaddressbookui.h"
-#include "linkaddressbook/addressbook.h"
-#include "mainwindow.h"
-#include "viewcontainer.h"
-#include "nicksonlineitem.h"
+#include "preferences.h"
+#include "editnotifydialog.h"
+#include "server.h"
+#include "connectionmanager.h"
 
-#include <QInputDialog>
-#include <QToolTip>
-#include <QTreeWidget>
+#include <QMultiHash>
+#include <KMenu>
+#include <KLineEdit>
 
-#include <KIconLoader>
-#include <KToolBar>
-
-
-NicksOnline::NicksOnline(QWidget* parent): ChatWindow(parent)
+NicksOnlineFilterModel::NicksOnlineFilterModel(QObject* parent) : QSortFilterProxyModel(parent)
 {
-    setName(i18n("Watched Nicks Online"));
+    Application* konvApp = static_cast<Application*>(kapp);
+    m_connectionManager = konvApp->getConnectionManager();
+    m_nickListModel = m_connectionManager->getNickListModel();
+
+    m_hostmask = false;
+    m_column = 1;
+
+    m_whatsThis = QString(); // i18n("placeholder");
+    m_onlineIcon = KIcon("im-user");
+    m_offlineIcon = KIcon("im-user-offline");
+
+    m_timer = new QTimer();
+    m_timer->setInterval(Preferences::self()->notifyDelay() * 1000);
+
+    updateMinimumRowHeight();
+
+    connect(m_timer, SIGNAL(timeout()), this, SLOT(isonCheck()));
+    connect(m_connectionManager, SIGNAL(connectedServerGroupsChanged(int, int)), this, SLOT(updateNotifyConnection(int, int)));
+    //TODO get these signals from input filter instead
+    connect(m_nickListModel, SIGNAL(nickOnline(int, int, QString)), this, SLOT(nickOnline(int, int, QString)));
+    connect(m_nickListModel, SIGNAL(nickOffline(int, int, QString)), this, SLOT(nickOffline(int, int, QString)));
+}
+
+NicksOnlineFilterModel::~NicksOnlineFilterModel()
+{
+}
+
+QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
+{
+    if (!index.isValid() || index.row() >= rowCount(index.parent()))
+        return QVariant();
+
+    //if (role == Qt::DisplayRole) return mapToSource(index).data().toString();
+
+    if (!index.parent().isValid()) //top level item
+    {
+        if (role == Qt::DisplayRole && mapToSource(index).internalId() < 0)
+        {
+            int sgId = mapToSource(index).row();
+            QStringList serverNames = QStringList();
+
+            if (m_connectionManager->getConnectedServerGroups().count(sgId) > 0)
+            {
+                QMultiHash<int,int>::const_iterator i = m_connectionManager->getConnectedServerGroups().constFind(sgId); 
+                while (i != m_connectionManager->getConnectedServerGroups().constEnd() && i.key() == sgId)
+                {
+                    Server* server = m_connectionManager->getServerByConnectionId(i.value());
+
+                    if (server)
+                        serverNames.append(server->getServerName());
+
+                    ++i;
+                }
+            }
+/* removed in favor of above method, keeping for now in case above needs debugging
+            if (m_connectionManager->connectionCount() > 0)
+            {
+                QList<Server*>::const_iterator i;
+
+                for (i = m_connectionManager->getServerList().constBegin(); i != m_connectionManager->getServerList().constEnd(); ++i)
+                {
+                    if (sgId == (*i)->getServerGroup()->id())
+                    {
+                        serverNames.append((*i)->getServerName());
+                    }
+                }
+            }
+*/
+            switch (index.column())
+            {
+                case 0:
+                    return mapToSource(index).data(role).toString();
+                case 1:
+                    if (!serverNames.isEmpty())
+                        return serverNames.join(", ");
+                    else
+                        return i18n("Disconnected");
+                default:
+                    return QVariant();
+            }
+        }
+        else
+            return QVariant();
+    }
+    else
+    {
+        if (role == Qt::WhatsThisRole)
+        {
+            return m_whatsThis;
+        }
+        else if (role == Qt::SizeHintRole)
+        {
+            //TODO Width here is arbitrary, find some way to get a meaningful width.
+            return QSize(30, m_minimumRowHeight);
+        }
+
+        if (mapToSource(index).parent().isValid())
+        {
+            QString nickString = mapToSource(index).data(role).toString();
+
+            int sgId = mapToSource(index).internalId();
+            QHash<int, QString> serverNames = QHash<int, QString>();
+
+            if (m_connectionManager->getConnectedServerGroups().count(sgId) > 0)
+            {
+                QMultiHash<int,int>::const_iterator i = m_connectionManager->getConnectedServerGroups().constFind(sgId);
+                while (i != m_connectionManager->getConnectedServerGroups().constEnd() && i.key() == sgId)
+                {
+                    Server* server = m_connectionManager->getServerByConnectionId(i.value());
+
+                    if (server && m_nickListModel->isNickOnline(i.value(), nickString))
+                        serverNames.insert(i.value(), server->getServerName());
+
+                    ++i;
+                }
+            }
+
+            if (!serverNames.isEmpty())
+            {
+                //This will get the nick object for the first connection
+                Nick2* nick = m_nickListModel->getNick(serverNames.keys().first(), nickString);
+                if (role == Qt::DisplayRole)
+                {
+                    switch (index.column())
+                    {
+                        case 0:
+                            return nickString; //TODO special cases for what to display here
+                        case 1:
+                            return QStringList(serverNames.values()).join(", ");
+                        default:
+                            return QVariant();
+                    }
+                }
+                else if (role == Qt::ToolTipRole)
+                {
+                    return nick->getQueryTooltip();
+                }
+                else if (role == Qt::DecorationRole)
+                {
+                    return m_onlineIcon;
+                }
+            }
+            else
+            {
+                if (role == Qt::DisplayRole)
+                {
+                    switch (index.column())
+                    {
+                        case 0:
+                            return nickString; //TODO special cases for what to display here
+                        case 1:
+                            return i18nc("(Offline) nickname details (e.g. real name from address book)", "(Offline) %1", QString());
+                            //TODO get info from kpeople to put in place of that qstring..
+                        default:
+                            return QVariant();
+                    }
+                }
+                else if (role == Qt::DecorationRole)
+                {
+                    return m_offlineIcon;
+                }
+            }
+        }
+    }
+
+    return QVariant();
+}
+
+QVariant NicksOnlineFilterModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    Q_UNUSED(orientation);
+
+    if (role == Qt::DisplayRole)
+    {
+        switch (section)
+        {
+            case 0:
+                return i18n("Network/Nickname/Channel");
+            case 1:
+                return i18n("Additional Information");
+            default:
+                return QVariant();
+        }
+    }
+
+    return QVariant();
+}
+
+bool NicksOnlineFilterModel::lessThan(const QModelIndex& left, const QModelIndex& right) const
+{
+    if (left.column() == 0 && right.column() == 0)
+    {
+        // Both servers of same server group
+        if (left.parent().isValid() && right.parent().isValid() && left.internalId() == right.internalId())
+        {
+            if (sortOrder() == Qt::DescendingOrder)
+                return (left.row() > right.row());
+            else
+                return (left.row() < right.row());
+        }
+        // Both server groups
+        else if(!left.parent().isValid() && !right.parent().isValid())
+        {
+            return (left.row() < right.row());
+        }
+    }
+
+    return QSortFilterProxyModel::lessThan(left, right);
+}
+
+bool NicksOnlineFilterModel::filterAcceptsColumn(int column, const QModelIndex& parent) const
+{
+    if (parent.isValid() && column != m_column)
+        return false;
+
+    return true;
+}
+
+void NicksOnlineFilterModel::nickOnline(int sgId, int cId, const QString& nick)
+{
+    QStringList notifyList = Preferences::serverGroupById(sgId)->notifyList();
+
+    if (notifyList.contains(nick))
+    {
+
+        QModelIndex parent = NicksOnlineFilterModel::index(Preferences::serverGroupList().indexOf(Preferences::serverGroupById(sgId)), m_column, QModelIndex());
+        QModelIndex index = NicksOnlineFilterModel::index(notifyList.indexOf(nick), m_column, parent);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
+    }
+
+    if (m_nickListModel->isNickOnline(cId, nick))
+    {
+        // If a nick object exists, then we can remove it from our watch list, because we share a channel with them.
+        removeNotifyNick(sgId, cId, nick);
+    }
+}
+
+void NicksOnlineFilterModel::nickOffline(int sgId, int cId, const QString& nick)
+{
+    //if the nick is in the watched list, and it is offline, then we can safely declare it offline.
+    if (isNickWatched(sgId, cId, nick))
+    {
+        if (sgId >= 0)
+        {
+            QStringList notifyList = Preferences::serverGroupById(sgId)->notifyList();
+
+            if (notifyList.contains(nick))
+            {
+                QModelIndex parent = NicksOnlineFilterModel::index(Preferences::serverGroupList().indexOf(Preferences::serverGroupById(sgId)), m_column, QModelIndex());
+                QModelIndex index = NicksOnlineFilterModel::index(notifyList.indexOf(nick), m_column, parent);
+
+                //TODO when we can dep Qt 5 we can specify what roles have changed.
+                emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
+            }
+        }
+        else
+        {
+            //TODO fetch meta contacts
+        }
+    }
+    else // if it's not watched, then it could have just left all shared channels, add it to be sure.
+    {
+        addNotifyNick(sgId, cId, nick);
+    }
+}
+
+bool NicksOnlineFilterModel::isNickWatched(int sgId, int cId, const QString& nick) const
+{
+    if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId) && 
+        ((m_watchedNicks[sgId][cId].contains(0) && m_watchedNicks[sgId][cId][0].contains(nick)) ||
+        (m_watchedNicks[sgId][cId].contains(1) && m_watchedNicks[sgId][cId][1].contains(nick)) ||
+        (m_watchedNicks[sgId][cId].contains(2) && m_watchedNicks[sgId][cId][2].contains(nick))))
+        return true;
+
+    return false;
+}
+
+void NicksOnlineFilterModel::addNotifyNick(int sgId, int cId, const QString& nick)
+{
+    //TODO figure out a way to check and see if MONITOR/WATCH/ISON are supported and prefer them in that order
+    bool monitor = false;
+    int mCount = 10;
+    bool watch = false;
+    int wCount = 10;
+    int type = 2;
+
+        // monitor is supported AND (there are no nicks for this servergroup yet AND monitor supports at least 1) OR
+    if (monitor && ((!m_watchedNicks.contains(sgId) && mCount > 0) || 
+        // (there are no nicks for this connection ID yet AND monitor supports at least 1) OR
+        (!m_watchedNicks[sgId].contains(cId) && mCount > 0) ||
+        // (there are nicks for this connection id AND monitor supports more nicks then are currently there)
+        (m_watchedNicks[sgId].contains(cId) && mCount > m_watchedNicks[sgId][cId][0].count()))) // using [key] creates the index, but in this case that is fine
+    {
+        type = 0;
+    }
+    else if (watch && ((!m_watchedNicks.contains(sgId) && wCount > 0) || 
+        (!m_watchedNicks[sgId].contains(cId) && wCount > 0) ||
+        (m_watchedNicks[sgId].contains(cId) && wCount > m_watchedNicks[sgId][cId][1].count())))
+    {
+        type = 1;
+    }
+
+    //TODO send the MONITOR command to the server
+    //MONITOR + target[,target2]*
+
+    //TODO send the WATCH command to the server
+    //WATCH +target[ +target2]
+
+    Server* server = m_connectionManager->getServerByConnectionId(cId);
+
+    if (!m_watchedNicks.contains(sgId))
+    {
+        WatchedNicks wNicks = WatchedNicks();
+        wNicks.insert(nick, QStringList(nick));
+        WatchedNickList wNickList = WatchedNickList();
+        wNickList.insert(type, wNicks);
+        WatchedNickConnections wConnections = WatchedNickConnections();
+        wConnections.insert(cId, wNickList);
+
+        m_watchedNicks.insert(sgId, wConnections);
+    }
+    else if (m_watchedNicks.contains(sgId) && !m_watchedNicks[sgId].contains(cId))
+    {
+        WatchedNicks wNicks = WatchedNicks();
+        wNicks.insert(nick, QStringList(nick));
+        WatchedNickList wNickList = WatchedNickList();
+        wNickList.insert(type, wNicks);
+
+        m_watchedNicks[sgId].insert(cId, wNickList);
+    }
+    else if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId) && !m_watchedNicks[sgId][cId].contains(type))
+    {
+        WatchedNicks wNicks = WatchedNicks();
+        wNicks.insert(nick, QStringList(nick));
+
+        m_watchedNicks[sgId][cId].insert(type, wNicks);
+    }
+    else if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId) && m_watchedNicks[sgId][cId].contains(type))
+    {
+        m_watchedNicks[sgId][cId][type].insert(nick, QStringList(nick));
+    }
+
+    //TODO figure out a way to have the initial notify nicks added to monitor or watch
+    // in the same message, rather than n times.
+    if (type == 0)
+        server->queue("MONITOR + " + nick, Server::LowPriority);
+    else if (type == 1)
+        server->queue("WATCH +" + nick, Server::LowPriority);
+    else if (!m_timer->isActive())
+    {
+        m_timer->start(1000);
+        m_timer->setInterval(Preferences::self()->notifyDelay() * 1000);
+    }
+}
+
+void NicksOnlineFilterModel::removeNotifyNick(int sgId, const QString& nick)
+{
+    if (m_watchedNicks.contains(sgId))
+    {
+        WatchedNickConnections::const_iterator i;
+
+        for (i = m_watchedNicks[sgId].constBegin(); i != m_watchedNicks[sgId].constEnd(); ++i)
+        {
+            removeNotifyNick(sgId, i.key(), nick);
+        }
+    }
+}
+
+void NicksOnlineFilterModel::removeNotifyNick(int sgId, int cId, const QString& nick)
+{
+    if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId))
+    {
+        Server* server = m_connectionManager->getServerByConnectionId(cId);
+
+        if (m_watchedNicks[sgId][cId].contains(0) && m_watchedNicks[sgId][cId][0].contains(nick))
+        {
+            m_watchedNicks[sgId][cId][0].remove(nick);
+            server->queue("MONITOR + " + nick, Server::LowPriority);
+        }
+        if (m_watchedNicks[sgId][cId].contains(1) && m_watchedNicks[sgId][cId][1].contains(nick))
+        {
+            m_watchedNicks[sgId][cId][1].remove(nick);
+            server->queue("WATCH -" + nick, Server::LowPriority);
+        }
+        if (m_watchedNicks[sgId][cId].contains(2) && m_watchedNicks[sgId][cId][2].contains(nick))
+        {
+            m_watchedNicks[sgId][cId][2].remove(nick);
+            // no need to send a removal command
+        }
+
+        // If there aren't any ISON's left turn off the timer
+
+        if (!isWatchTypeEmpty(2))
+            m_timer->stop();
+    }
+}
+
+bool NicksOnlineFilterModel::isWatchTypeEmpty(int type) const
+{
+    WatchedNickListHash::const_iterator i;
+
+    for (i = m_watchedNicks.constBegin(); i != m_watchedNicks.constEnd(); ++i)
+    {
+        WatchedNickConnections::const_iterator j;
+
+        for (j = i.value().constBegin(); j != i.value().constEnd(); ++j)
+        {
+            if (j.value().contains(type))
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+void NicksOnlineFilterModel::isonCheck()
+{
+    //run by a timer
+
+    //iterate over all server groups and send out messages on connections
+
+    QStringList isonList = QStringList();
+
+    WatchedNickListHash::const_iterator i;
+
+    for (i = m_watchedNicks.constBegin(); i != m_watchedNicks.constEnd(); ++i)
+    {
+        WatchedNickConnections::const_iterator j;
+
+        for (j = i.value().constBegin(); j != i.value().constEnd(); ++j)
+        {
+            if (j.value().contains(2) && j.value()[2].count() > 0)
+            {
+                QStringList isonList = QStringList();
+
+                WatchedNicks::const_iterator k;
+
+                for (k = j.value()[2].constBegin(); k != j.value()[2].constEnd(); ++k)
+                {
+                    isonList.append(k.key());
+                }
+
+                if (!isonList.isEmpty())
+                {
+                    Server* server = m_connectionManager->getServerByConnectionId(j.key());
+                    // message must be less than 512 bytes, 'ISON <list><cr><lf>' leaving 505 for nicks and their separation
+                    QStringList messages = QStringList();
+
+                    if (isonList.join(" ").length() > 505)
+                    {
+                        QString message = QString();
+
+                        QStringList::const_iterator m;
+                        for (m = isonList.constBegin(); m != isonList.constEnd(); ++m)
+                        {
+                            // current length, + nick, + space(1), + end(2)
+                            if (message.isEmpty())
+                                message = "ISON " + (*m);
+
+                            if (message.isEmpty() || (message.length() + (*m).length() + 3) > 505)
+                            {
+                                messages.append(message);
+
+                                message = "ISON " + (*m);
+                            }
+                            else
+                                message += " " + (*m);
+                        }
+
+                        if (!message.isEmpty())
+                            messages.append(message);
+                    }
+                    else
+                        messages.append("ISON " + isonList.join(" "));
+
+                    server->queueList(messages, Server::LowPriority);
+                }
+            }
+        }
+    }
+}
+
+void NicksOnlineFilterModel::updateMinimumRowHeight()
+{
+    Images* images = Application::instance()->images();
+    m_minimumRowHeight = images->getNickIcon(Images::Normal, false).height() + 2;
+}
+
+void NicksOnlineFilterModel::updateNotifyConnection(int sgId, int cId)
+{
+    if (m_connectionManager->getConnectedServerGroups().contains(sgId) && !m_watchedNicks.contains(sgId))
+    {    //TODO get servergroup, add notify nicks to m_watchedNicks
+        Server* server = m_connectionManager->getServerByConnectionId(cId);
+
+        if (server && server->getServerGroup())
+        {
+            QStringList notifyList = server->getServerGroup()->notifyList();
+            QStringList::const_iterator i;
+
+            for (i = notifyList.constBegin(); i != notifyList.constEnd(); ++i)
+            {
+                addNotifyNick(sgId, cId, *i);
+            }
+        }
+    }
+    else if (!m_connectionManager->getConnectedServerGroups().contains(sgId) && m_watchedNicks.contains(sgId))
+    {
+        m_watchedNicks.remove(sgId);
+    }
+}
+
+NicksOnline::NicksOnline(QWidget* parent) : ChatWindow(parent)
+{
     setType(ChatWindow::NicksOnline);
+    setName(i18n("Watched Nicks Online"));
 
     setSpacing(0);
     m_toolBar = new KToolBar(this, true, true);
-    m_addNickname = m_toolBar->addAction(KIcon("list-add-user"), i18n("&Add Nickname..."));
+    m_addNickname = m_toolBar->addAction(KIcon("list-add-user"), i18n("&Add Nickname..."), this, SLOT(addNickname()));
     m_addNickname->setWhatsThis(i18n("Click to add a new nick to the list of nicknames that appear on this screen."));
-    m_removeNickname = m_toolBar->addAction(KIcon("list-remove-user"), i18n("&Remove Nickname"));
+    m_removeNickname = m_toolBar->addAction(KIcon("list-remove-user"), i18n("&Remove Nickname"), this, SLOT(removeNickname()));
     m_removeNickname->setWhatsThis(i18n("Click to remove a nick from the list of nicknames that appear on this screen."));
     m_toolBar->addSeparator();
-    m_newContact = m_toolBar->addAction(KIcon("contact-new"), i18n("Create New C&ontact..."));
-    m_editContact = m_toolBar->addAction(KIcon("document-edit"), i18n("Edit C&ontact..."));
-    m_editContact->setWhatsThis(i18n("Click to create, view, or edit the KAddressBook entry associated with the nickname selected above."));
+    //TODO change this to create meta/super nick/ whatever we call it
+    m_newContact = m_toolBar->addAction(KIcon("contact-new"), i18n("Create New C&ontact..."), this, SLOT(createContact()));
+    m_editContact = m_toolBar->addAction(KIcon("document-edit"), i18n("Edit C&ontact..."), this, SLOT(editContact()));
+    //m_editContact->setWhatsThis(i18n("Click to create, view, or edit the KAddressBook entry associated with the nickname selected above."));
     m_toolBar->addSeparator();
-    m_chooseAssociation = m_toolBar->addAction(KIcon("office-address-book"), i18n("&Choose Association..."));
-    m_changeAssociation = m_toolBar->addAction(KIcon("office-address-book"), i18n("&Change Association..."));
-    m_changeAssociation->setWhatsThis(i18n("Click to associate the nickname selected above with an entry in KAddressBook."));
-    m_deleteAssociation = m_toolBar->addAction(KIcon("edit-delete"), i18n("&Delete Association"));
-    m_deleteAssociation->setWhatsThis(i18n("Click to remove the association between the nickname selected above and a KAddressBook entry."));
+    m_changeAssociation = m_toolBar->addAction(KIcon("office-address-book"), i18n("&Change Association..."), this, SLOT(changeAssociation()));
+    //m_changeAssociation->setWhatsThis(i18n("Click to associate the nickname selected above with an entry in KAddressBook."));
     m_toolBar->addSeparator();
-    m_sendMail = m_toolBar->addAction(KIcon("mail-send"), i18n("&Send Email..."));
-    m_toolBar->addSeparator();
-    m_whois = m_toolBar->addAction(KIcon("office-address-book"), i18n("&Whois"));
-    m_openQuery = m_toolBar->addAction(KIcon("office-address-book"), i18n("Open &Query"));
-    m_toolBar->addSeparator();
-    m_joinChannel = m_toolBar->addAction(KIcon("irc-join-channel"), i18n("&Join Channel"));
+    m_openQuery = m_toolBar->addAction(KIcon("office-address-book"), i18n("Open &Query"), this, SLOT(openQuery()));
+
+    //UI Setup
+    setupUi(this);
+
+    Application* konvApp = static_cast<Application*>(kapp);
+    m_nicksOnlineModel = konvApp->getConnectionManager()->getNicksOnlineFilterModel();
+
+    m_nickSearchLine->setProxy(m_nicksOnlineModel);
+    m_nicksOnlineView->setModel(m_nicksOnlineModel);
+
+    m_nicksOnlineView->setSortingEnabled(true);
+    m_nicksOnlineView->header()->setMovable(false);
+
+    Preferences::restoreColumnState(m_nicksOnlineView, "NicksOnline ViewSettings");
+
     connect(m_toolBar, SIGNAL(actionTriggered(QAction*)), this, SLOT(slotPopupMenu_Activated(QAction*)));
 
-    m_nickListView=new QTreeWidget(this);
+    connect(m_nicksOnlineView, SIGNAL(activated(QModelIndex)), this, SLOT(activated(QModelIndex)));
+    connect(m_nicksOnlineView->selectionModel(), SIGNAL(currentChanged(QModelIndex, QModelIndex)), this, SLOT(currentChanged(QModelIndex, QModelIndex)));
+    connect(m_nicksOnlineView, SIGNAL(collapsed(QModelIndex)), this, SLOT(collapsed(QModelIndex)));
+    connect(m_nicksOnlineView, SIGNAL(expanded(QModelIndex)), this, SLOT(expanded(QModelIndex)));
+    connect(m_nicksOnlineView, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextMenu(QPoint)));
 
-    // Set to false every 8 seconds to permit a whois on watched nicks lacking information.
-    // Remove when server or addressbook does this automatically.
-    m_whoisRequested = true;
-
-    m_kabcIconSet = KIcon("office-address-book");
-    m_onlineIcon = KIcon("im-user");
-    m_offlineIcon = KIcon("im-user-offline");
-    m_nickListView->setColumnCount(2);
-    m_nickListView->headerItem()->setText(0, i18n("Network/Nickname/Channel"));
-    m_nickListView->headerItem()->setText(1, i18n("Additional Information"));
-    m_nickListView->setRootIsDecorated(true);
-    m_nickListView->setSortingEnabled(true);
-
-    Preferences::restoreColumnState(m_nickListView, "NicksOnline ViewSettings");
-
-    QString nickListViewWT = i18n(
-        "<p>These are all the nicknames on your Nickname Watch list, listed under the "
-        "server network they are connected to.  The list also includes the nicknames "
-        "in KAddressBook associated with the server network.</p>"
-        "<p>The <b>Additional Information</b> column shows the information known "
-        "for each nickname.</p>"
-        "<p>The channels the nickname has joined are listed underneath each nickname.</p>"
-        "<p>Nicknames appearing under <b>Offline</b> are not connected to any of the "
-        "servers in the network.</p>"
-        "<p>Right-click with the mouse on a nickname to perform additional functions.</p>");
-    m_nickListView->setWhatsThis(nickListViewWT);
-    m_nickListView->viewport()->installEventFilter(this);
-
-    connect(m_nickListView, SIGNAL(itemDoubleClicked(QTreeWidgetItem*,int)),
-        this,SLOT(processDoubleClick(QTreeWidgetItem*,int)));
-
-    setupToolbarActions(0);
-
-    // Create context menu.
-    m_popupMenu = new KMenu(this);
-    m_popupMenu->setObjectName("nicksonline_context_menu");
-    m_nickListView->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_nickListView, SIGNAL(customContextMenuRequested(QPoint)),
-        this, SLOT(slotCustomContextMenuRequested(QPoint)));
-    connect(m_nickListView, SIGNAL(itemSelectionChanged()),
-            this, SLOT(slotNickListView_SelectionChanged()));
-
-    // Display info for all currently-connected servers.
-    refreshAllServerOnlineLists();
-
-    // Connect and start refresh timer.
-    m_timer = new QTimer(this);
-    m_timer->setObjectName("nicksOnlineTimer");
-    connect(m_timer, SIGNAL (timeout()), this, SLOT(timerFired()));
-    // TODO: User preference for refresh interval.
-    m_timer->start(8000);
 }
 
 NicksOnline::~NicksOnline()
 {
-    Preferences::saveColumnState(m_nickListView, "NicksOnline ViewSettings");
-
-    m_timer->stop();
-    delete m_timer;
-    delete m_nickListView;
 }
 
-bool NicksOnline::eventFilter(QObject*obj, QEvent* event )
+QString NicksOnline::getTextInLine()
 {
-    if( ( obj == m_nickListView->viewport() ) && ( event->type() == QEvent::ToolTip ) )
+    return m_nickSearchLine->lineEdit()->text();
+}
+
+void NicksOnline::appendInputText(const QString& text, bool fromCursor)
+{
+    Q_UNUSED(fromCursor);
+    m_nickSearchLine->setText(m_nickSearchLine->lineEdit()->text() + text);
+}
+
+//Used to disable functions when not connected
+void NicksOnline::serverOnline(bool online)
+{
+    Q_UNUSED(online)
+    //TODO find out if this is useful at all for watched nicks
+}
+
+void NicksOnline::addNickname()
+{
+    // open gui to add nick
+    int sgId = -1;
+    QModelIndex index = m_nicksOnlineView->selectionModel()->currentIndex();
+
+    if (index.isValid() && index.parent().isValid())
     {
-        QHelpEvent* helpEvent = static_cast<QHelpEvent*>( event );
-
-        QTreeWidgetItem *item = m_nickListView->itemAt( helpEvent->pos() );
-
-        if( item )
-        {
-            NickInfoPtr nickInfo = getNickInfo(item);
-            if ( nickInfo )
-            {
-               QString text =  nickInfo->tooltip();
-               if( !text.isEmpty() )
-                       QToolTip::showText( helpEvent->globalPos(), text );
-               else
-                       QToolTip::hideText();
-            }
-            else
-	        QToolTip::hideText();
-        }
-        else
-                QToolTip::hideText();
+        sgId = index.data(ServerGroupIdRole).toInt();
     }
 
+    EditNotifyDialog* end = new EditNotifyDialog(this, sgId);
+    connect(end, SIGNAL(notifyChanged(int, QString)), this, SLOT(slotAddNickname(int, QString)));
 
-    return ChatWindow::eventFilter( obj, event );
+    end->show();
 }
 
-QTreeWidget* NicksOnline::getNickListView()
+void NicksOnline::slotAddNickname(int sgId, const QString& nick)
 {
-    return m_nickListView;
-}
-
-/**
- * Returns the named child of parent item in a NicksOnlineItem
- * @param parent            Pointer to a NicksOnlineItem.
- * @param name              The name in the desired child QListViewItem, must be in column 0.
- * @param type              The type of entry to be found
- * @return                  Pointer to the child QListViewItem or 0 if not found.
- */
-QTreeWidgetItem* NicksOnline::findItemChild(const QTreeWidgetItem* parent, const QString& name, NicksOnlineItem::NickListViewColumn type)
-{
-    if (!parent) return 0;
-    for (int i = 0; i < parent->childCount(); ++i)
+    //TODO this does not update the model, idea: add notify through servergroupmodel
+    Konversation::ServerGroupSettingsPtr serverGroup = Preferences::serverGroupById(sgId);
+    if (serverGroup)
     {
-        QTreeWidgetItem* child = parent->child(i);
-        if(static_cast<NicksOnlineItem*>(child)->type() == type && child->text(0) == name) return child;
+        serverGroup->addNotify(nick);
+        //TODO is it nescessary/appropriate to save here, if so where else.
+        static_cast<Application*>(kapp)->saveOptions(true);
     }
-    return 0;
 }
 
-/**
- * Returns the first occurrence of a child item of a given type in a NicksOnlineItem
- * @param parent            Pointer to a NicksOnlineItem.
- * @param type              The type of entry to be found
- * @return                  Pointer to the child QListViewItem or 0 if not found.
- */
-QTreeWidgetItem* NicksOnline::findItemType(const QTreeWidgetItem* parent, NicksOnlineItem::NickListViewColumn type)
+void NicksOnline::removeNickname()
 {
-    if (!parent) return 0;
-    for (int i = 0; i < parent->childCount(); ++i)
-    {
-        QTreeWidgetItem* child = parent->child(i);
-        if(static_cast<NicksOnlineItem*>(child)->type() == type) return child;
-    }
-    return 0;
-}
+    //TODO this does not update the model, idea: add notify through servergroupmodel
+    QModelIndex index = m_nicksOnlineView->selectionModel()->currentIndex();
 
-/**
- * Returns a pointer to the network QListViewItem with the given name.
- * @param name              The name of the network.
- * @return                  Pointer to the QListViewItem or 0 if not found.
- */
-QTreeWidgetItem* NicksOnline::findNetworkRoot(int serverGroupId)
-{
-    for (int i = 0; i < m_nickListView->invisibleRootItem()->childCount(); ++i)
-    {
-        QTreeWidgetItem* child = m_nickListView->invisibleRootItem()->child(i);
-
-        if (child->data(0, Qt::UserRole).toInt() == serverGroupId)
-            return child;
-    }
-
-    return 0;
-}
-
-/**
- * Return a string containing formatted additional information about a nick.
- * @param nickInfo          A pointer to NickInfo structure for the nick.  May be Null.
- * @param addressee         Addressbook entry for the nick.  May be empty.
- * @return                  A string formatted for display containing the information
- *                          about the nick.
- * @return needWhois        True if a WHOIS needs to be performed on the nick
- *                          to get additional information.
- */
-QString NicksOnline::getNickAdditionalInfo(NickInfoPtr nickInfo, KABC::Addressee addressee,
-bool& needWhois)
-{
-    QString info;
-    if (!addressee.isEmpty())
-    {
-        if (addressee.fullEmail().isEmpty())
-            info += addressee.realName();
-        else
-            info += addressee.fullEmail();
-    }
-    QString niInfo;
-    if (nickInfo)
-    {
-        if (nickInfo->isAway())
-        {
-            niInfo += i18n("Away");
-            if (!nickInfo->getAwayMessage().isEmpty())
-                niInfo += " (" + nickInfo->getAwayMessage() + ')';
-        }
-        if (!nickInfo->getHostmask().isEmpty())
-            niInfo += ' ' + nickInfo->getHostmask();
-        if (!nickInfo->getRealName().isEmpty())
-            niInfo += " (" + nickInfo->getRealName() + ')';
-        if (!nickInfo->getNetServer().isEmpty())
-        {
-            niInfo += i18n( " online via %1", nickInfo->getNetServer() );
-            if (!nickInfo->getNetServerInfo().isEmpty())
-                niInfo += " (" + nickInfo->getNetServerInfo() + ')';
-        }
-        if (!nickInfo->getOnlineSince().isNull())
-            niInfo += i18n( " since %1", nickInfo->getPrettyOnlineSince() );
-    }
-    needWhois = niInfo.isEmpty();
-    if (!info.isEmpty() && !needWhois) info += ' ';
-    return info + niInfo;
-}
-
-/**
- * Refresh the nicklistview for a single server.
- * @param server            The server to be refreshed.
- */
-void NicksOnline::updateServerOnlineList(Server* servr)
-{
-    // Return if connection is an ephemeral one, because
-    // we cant watch them anyway.
-    if (!servr->getServerGroup())
+    if (!index.isValid() || !index.parent().isValid())
         return;
 
-    bool newNetworkRoot = false;
-    QString serverName = servr->getServerName();
-    QString networkName = servr->getDisplayName();
-    QTreeWidgetItem* networkRoot = findNetworkRoot(servr->getServerGroup()->id());
-    // If network is not in our list, add it.
-    if (!networkRoot)
-    {
-        networkRoot = new NicksOnlineItem(NicksOnlineItem::NetworkRootItem,m_nickListView,networkName);
-        networkRoot->setData(0, Qt::UserRole, servr->getServerGroup()->id());
-        newNetworkRoot = true;
-    }
-    // Store server name in hidden column.
-    // Note that there could be more than one server in the network connected,
-    // but it doesn't matter because all the servers in a network have the same
-    // watch list.
-    networkRoot->setText(nlvcServerName, serverName);
-    // Update list of servers in the network that are connected.
-    QStringList serverList = networkRoot->text(nlvcAdditionalInfo).split(',', QString::SkipEmptyParts);
-    if (!serverList.contains(serverName)) serverList.append(serverName);
-    networkRoot->setText(nlvcAdditionalInfo, serverList.join(","));
-    // Get watch list.
-    QStringList watchList = servr->getWatchList();
-    QStringList::iterator itEnd = watchList.end();
-    QString nickname;
+    QString nick = index.data(NickRole).toString();
+    int sgId = index.data(ServerGroupIdRole).toInt();
 
-    for (QStringList::iterator it = watchList.begin(); it != itEnd; ++it)
-    {
-        nickname = (*it);
-        NickInfoPtr nickInfo = getOnlineNickInfo(networkName, nickname);
+    Konversation::ServerGroupSettingsPtr serverGroup = Preferences::serverGroupById(sgId);
 
-        if (nickInfo && nickInfo->getPrintedOnline())
-        {
-            // Nick is online.
-            // Which server did NickInfo come from?
-            Server* server=nickInfo->getServer();
-            // Get addressbook entry (if any) for the nick.
-            KABC::Addressee addressee = nickInfo->getAddressee();
-            // Construct additional information string for nick.
-            bool needWhois = false;
-            QString nickAdditionalInfo = getNickAdditionalInfo(nickInfo, addressee, needWhois);
-            // Add to network if not already added.
-            QTreeWidgetItem* nickRoot = findItemChild(networkRoot, nickname, NicksOnlineItem::NicknameItem);
-            if (!nickRoot)
-                nickRoot = new NicksOnlineItem(NicksOnlineItem::NicknameItem, networkRoot, nickname, nickAdditionalInfo);
-            NicksOnlineItem* nickitem = static_cast<NicksOnlineItem*>(nickRoot);
-            nickitem->setConnectionId(server->connectionId ());
-            // Mark nick as online
-            nickitem->setOffline(false);
-            // Update icon
-            nickitem->setIcon(nlvcNick, m_onlineIcon);
-            nickRoot->setText(nlvcAdditionalInfo, nickAdditionalInfo);
-            nickRoot->setText(nlvcServerName, serverName);
-            // If no additional info available, request a WHOIS on the nick.
-            if (!m_whoisRequested)
-            {
-                if (needWhois)
-                {
-                    requestWhois(networkName, nickname);
-                    m_whoisRequested = true;
-                }
-            }
-            // Set Kabc icon if the nick is associated with an addressbook entry.
-            if (!addressee.isEmpty())
-                nickRoot->setIcon(nlvcKabc, QIcon(m_kabcIconSet.pixmap(
-                    KIconLoader::Small, QIcon::Normal, QIcon::On)));
-            else
-                nickRoot->setIcon(nlvcKabc, QIcon(m_kabcIconSet.pixmap(
-                    KIconLoader::Small, QIcon::Disabled, QIcon::Off)));
+    serverGroup->removeNotify(nick);
 
-            QStringList channelList = server->getNickChannels(nickname);
-            QStringList::iterator itEnd2 = channelList.end();
-
-            for (QStringList::iterator it2 = channelList.begin(); it2 != itEnd2; ++it2)
-            {
-                // Known channels where nickname is online and mode in each channel.
-                // FIXME: If user connects to multiple servers in same network, the
-                // channel info will differ between the servers, resulting in inaccurate
-                // mode and led info displayed.
-
-                QString channelName = (*it2);
-
-                ChannelNickPtr channelNick = server->getChannelNick(channelName, nickname);
-                QString nickMode;
-                if (channelNick->hasVoice()) nickMode = nickMode + i18n(" Voice");
-                if (channelNick->isHalfOp()) nickMode = nickMode + i18n(" HalfOp");
-                if (channelNick->isOp()) nickMode = nickMode + i18n(" Operator");
-                if (channelNick->isOwner()) nickMode = nickMode + i18n(" Owner");
-                if (channelNick->isAdmin()) nickMode = nickMode + i18n(" Admin");
-                QTreeWidgetItem* channelItem = findItemChild(nickRoot, channelName, NicksOnlineItem::ChannelItem);
-                if (!channelItem) channelItem = new NicksOnlineItem(NicksOnlineItem::ChannelItem,nickRoot,
-                        channelName, nickMode);
-                channelItem->setText(nlvcAdditionalInfo, nickMode);
-
-                // Icon for mode of nick in each channel.
-                Images::NickPrivilege nickPrivilege = Images::Normal;
-                if (channelNick->hasVoice()) nickPrivilege = Images::Voice;
-                if (channelNick->isHalfOp()) nickPrivilege = Images::HalfOp;
-                if (channelNick->isOp()) nickPrivilege = Images::Op;
-                if (channelNick->isOwner()) nickPrivilege = Images::Owner;
-                if (channelNick->isAdmin()) nickPrivilege = Images::Admin;
-                if (server->getJoinedChannelMembers(channelName) != 0)
-                    channelItem->setIcon(nlvcChannel,
-                        QIcon(Application::instance()->images()->getNickIcon(nickPrivilege, false)));
-                else
-                    channelItem->setIcon(nlvcChannel,
-                        QIcon(Application::instance()->images()->getNickIcon(nickPrivilege, true)));
-            }
-            // Remove channel if nick no longer in it.
-            for (int i = 0; i < nickRoot->childCount(); ++i)
-            {
-                QTreeWidgetItem* child = nickRoot->child(i);
-                if (!channelList.contains(child->text(nlvcNick)))
-                {
-                    delete nickRoot->takeChild(i);
-                    i--;
-                }
-            }
-        }
-        else
-        {
-            // Nick is offline.
-            QTreeWidgetItem* nickRoot = findItemChild(networkRoot, nickname, NicksOnlineItem::NicknameItem);
-            if (!nickRoot)
-                nickRoot = new NicksOnlineItem(NicksOnlineItem::NicknameItem, networkRoot, nickname);
-            // remove channels from the nick
-            qDeleteAll(nickRoot->takeChildren());
-            NicksOnlineItem* nickitem = static_cast<NicksOnlineItem*>(nickRoot);
-            nickitem->setConnectionId(servr->connectionId ());
-            // Mark nick as offline
-            nickitem->setOffline (true);
-            // Update icon
-            nickitem->setIcon(nlvcNick, m_offlineIcon);
-            nickRoot->setText(nlvcServerName, serverName);
-            // Get addressbook entry for the nick.
-            KABC::Addressee addressee = servr->getOfflineNickAddressee(nickname);
-            // Format additional information for the nick.
-            bool needWhois = false;
-            QString nickAdditionalInfo = getNickAdditionalInfo(NickInfoPtr(), addressee, needWhois);
-            nickRoot->setText(nlvcAdditionalInfo, i18nc("(Offline) nickname details (e.g. real name from address book)",
-                "(Offline) %1", nickAdditionalInfo));
-            // Set Kabc icon if the nick is associated with an addressbook entry.
-            if (!addressee.isEmpty())
-                nickRoot->setIcon(nlvcKabc, QIcon(m_kabcIconSet.pixmap(
-                    KIconLoader::Small, QIcon::Normal, QIcon::On)));
-            else
-                nickRoot->setIcon(nlvcKabc, QIcon(m_kabcIconSet.pixmap(
-                    KIconLoader::Small, QIcon::Disabled, QIcon::Off)));
-        }
-    }
-    // Erase nicks no longer being watched.
-    for (int i = 0; i < networkRoot->childCount(); ++i)
-    {
-        QTreeWidgetItem* item = networkRoot->child(i);
-        QString nickname = item->text(nlvcNick);
-        if (!watchList.contains(nickname) && serverName == item->text(nlvcServerName))
-        {
-            delete networkRoot->takeChild(i);
-            i--;
-        }
-    }
-    // Expand server if newly added to list.
-    if (newNetworkRoot)
-    {
-        networkRoot->setExpanded(true);
-        // Connect server NickInfo updates.
-        connect (servr, SIGNAL(nickInfoChanged(Server*,NickInfoPtr)),
-            this, SLOT(slotNickInfoChanged(Server*,NickInfoPtr)));
-    }
+    //TODO make sure there's a signal so the model knows it has changed
 }
 
-/**
- * Determines if a nick is online in any of the servers in a network and returns
- * a NickInfo if found, otherwise 0.
- * @param networkName        Server network name.
- * @param nickname           Nick name.
- * @return                   NickInfo if nick is online in any server, otherwise 0.
- */
-NickInfoPtr NicksOnline::getOnlineNickInfo(QString& networkName, QString& nickname)
+void NicksOnline::createContact()
 {
-    // Get list of pointers to all servers.
-    Application* konvApp = static_cast<Application*>(kapp);
-    const QList<Server*> serverList = konvApp->getConnectionManager()->getServerList();
-    foreach (Server* server, serverList)
-    {
-        if (server->getDisplayName() == networkName)
-        {
-            NickInfoPtr nickInfo = server->getNickInfo(nickname);
-            if (nickInfo) return nickInfo;
-        }
-    }
-    return NickInfoPtr(); //TODO FIXME NULL NULL NULL
+    //TODO create a kpeople contact
 }
 
-/**
- * Requests a WHOIS for a specified server network and nickname.
- * The request is sent to the first server found in the network.
- * @param groupName          Server group name.
- * @param nickname           Nick name.
- */
-void NicksOnline::requestWhois(QString& networkName, QString& nickname)
+void NicksOnline::editContact()
 {
-    Application* konvApp = static_cast<Application*>(kapp);
-    const QList<Server*> serverList = konvApp->getConnectionManager()->getServerList();
-    foreach (Server* server, serverList)
-    {
-        if (server->getDisplayName() == networkName)
-        {
-            server->requestWhois(nickname);
-            return;
-        }
-    }
+    //TODO open a gui to edit a kpeople connected contact
 }
 
-/**
- * Updates the notify list based on the current state of the tree
- */
-void NicksOnline::updateNotifyList()
+void NicksOnline::changeAssociation()
 {
-  // notify list
-  QMap<int, QStringList> notifyList;
-  // fill in the notify list
-  for (int i = 0; i < m_nickListView->topLevelItemCount(); ++i)
-  {
-    QTreeWidgetItem* networkRoot = m_nickListView->topLevelItem(i);
-    // nick list for this network root
-    QStringList nicks;
-    for (int j = 0; j < networkRoot->childCount(); ++j)
-    {
-      NicksOnlineItem *item = dynamic_cast<NicksOnlineItem*>(networkRoot->child(j));
-      if (item->type() == NicksOnlineItem::NicknameItem)
-      {
-        // add the nick to the list
-        nicks << item->text(nlvcNick);
-      }
-    }
-    // insert nick list to the notify list
-    notifyList.insert(networkRoot->data(0, Qt::UserRole).toInt(), nicks);
-  }
-  // update notify list
-  //Preferences::setNotifyList(notifyList);
-  // save notify list
-  static_cast<Application*>(kapp)->saveOptions(false);
+    //TODO open a gui to edit associated nicks / meta contacts for this contact
 }
 
-/**
- * Refresh the nicklistview for all servers.
- */
-void NicksOnline::refreshAllServerOnlineLists()
+void NicksOnline::openQuery()
 {
-    Application* konvApp = static_cast<Application*>(kapp);
-    const QList<Server*> serverList = konvApp->getConnectionManager()->getServerList();
-    // Remove servers no longer connected.
-    for (int i = 0; i < m_nickListView->invisibleRootItem()->childCount(); ++i)
-    {
-        QTreeWidgetItem *child = m_nickListView->invisibleRootItem()->child(i);
-        QString networkName = child->text(nlvcNetwork);
-        QStringList serverNameList = child->text(nlvcAdditionalInfo).split(',', QString::SkipEmptyParts);
-        QStringList::Iterator itEnd = serverNameList.end();
-        QStringList::Iterator it = serverNameList.begin();
-        while (it != itEnd)
-        {
-            QString serverName = *it;
-            // Locate server in server list.
-            bool found = false;
-            foreach (Server* server, serverList)
-            {
-                if ((server->getServerName() == serverName) &&
-                    (server->getDisplayName() == networkName)) found = true;
-            }
-            if (!found)
-                it = serverNameList.erase(it);
-            else
-                ++it;
-        }
-        // Remove Networks with no servers connected, otherwise update list of connected
-        // servers.
-        if (serverNameList.empty())
-        {
-            delete m_nickListView->invisibleRootItem()->takeChild(i);
-            i--;
-        }
-        else
-            child->setText(nlvcAdditionalInfo, serverNameList.join(","));
-    }
-    // Display info for all currently-connected servers.
-    foreach (Server* server, serverList)
-    {
-        updateServerOnlineList(server);
-    }
-    // Refresh addressbook buttons.
-    slotNickListView_SelectionChanged();
-}
+    QModelIndex index = m_nicksOnlineView->selectionModel()->currentIndex();
 
-void NicksOnline::timerFired()
-{
-    // Allow one WHOIS request per cycle.
-    m_whoisRequested = false;
-    refreshAllServerOnlineLists();
-}
-
-/**
- * When a user double-clicks a nickname in the nicklistview, let server know so that
- * it can perform the user's chosen default action for that.
- */
-void NicksOnline::processDoubleClick(QTreeWidgetItem* item, int column)
-{
-    Q_UNUSED(column);
-
-    NicksOnlineItem* nickitem = dynamic_cast<NicksOnlineItem*>(item);
-
-    if (!nickitem || nickitem->isOffline())
-        return;
-    // Only emit signal when the user double clicked a nickname rather than
-    // a server name or channel name.
-    if (nickitem->type() == NicksOnlineItem::NicknameItem)
-        emit doubleClicked(nickitem->connectionId(), nickitem->text(nlvcNick));
-    if (nickitem->type() == NicksOnlineItem::ChannelItem)
-    {
-      NicksOnlineItem* nickRoot = dynamic_cast<NicksOnlineItem*>(nickitem->parent());
-      Server* server = Application::instance()->getConnectionManager()->getServerByConnectionId(nickRoot->connectionId());
-      ChatWindow* channel = server->getChannelByName(nickitem->text(nlvcChannel));
-
-      if (channel)
-        emit showView(channel);
-      else
-      {
-        // Get the server object corresponding to the connection id.
-        server->queue( "JOIN "+ nickitem->text(nlvcChannel) );
-      }
-    }
-}
-
-/**
- * Returns the server name and nickname of the specified nicklistview item.
- * @param item              The nicklistview item.
- * @return serverName       Name of the server for the nick at the item, or Null if not a nick.
- * @return nickname         The nickname at the item.
- */
-bool NicksOnline::getItemServerAndNick(const QTreeWidgetItem* item, QString& serverName, QString& nickname)
-{
-    if (!item) return false;
-    // convert into NicksOnlineItem
-    const NicksOnlineItem* nlItem=static_cast<const NicksOnlineItem*>(item);
-    // If on a network, return false;
-    if (nlItem->type() == NicksOnlineItem::NetworkRootItem) return false;
-    // get server name
-    serverName = item->text(nlvcServerName);
-    // If on a channel, move up to the nickname.
-    if (nlItem->type() == NicksOnlineItem::ChannelItem)
-    {
-        item = item->parent();
-        serverName = item->text(nlvcServerName);
-    }
-    nickname = item->text(nlvcNick);
-    return true;
-}
-
-NickInfoPtr NicksOnline::getNickInfo(const QTreeWidgetItem* item)
-{
-    QString serverName;
-    QString nickname;
-
-    getItemServerAndNick(item, serverName, nickname);
-
-    if (serverName.isEmpty() || nickname.isEmpty())
-        return NickInfoPtr(); //TODO FIXME NULL NULL NULL
-
-    Server* server = Application::instance()->getConnectionManager()->getServerByName(serverName);
-
-    if (server)
-        return server->getNickInfo(nickname);
-
-    return NickInfoPtr(); //TODO FIXME NULL NULL NULL
-}
-
-/**
- * Given a server name and nickname, returns the item in the Nick List View displaying
- * the nick.
- * @param serverName        Name of server.
- * @param nickname          Nick name.
- * @return                  Pointer to QListViewItem displaying the nick, or 0 if not found.
- *
- * @see getItemServerAndNick
- */
-QTreeWidgetItem* NicksOnline::getServerAndNickItem(const QString& serverName,
-const QString& nickname)
-{
-    Server* server = Application::instance()->getConnectionManager()->getServerByName(serverName);
-    if (!server) return 0;
-    QString networkName = server->getDisplayName();
-    QList<QTreeWidgetItem*> items = m_nickListView->findItems(networkName, Qt::MatchExactly | Qt::MatchCaseSensitive, nlvcNetwork);
-    if (items.count() == 0) return 0;
-    QTreeWidgetItem* networkRoot = items.at(0);
-    if (!networkRoot) return 0;
-    QTreeWidgetItem* nickRoot = findItemChild(networkRoot, nickname, NicksOnlineItem::NicknameItem);
-    return nickRoot;
-}
-
-/**
- * Perform an addressbook command (edit contact, create new contact,
- * change/delete association.)
- * @param id                The command id.  @ref CommandIDs.
- *
- * The operation is performed on the nickname at the currently-selected item in
- * the nicklistview.
- *
- * Also refreshes the nicklistview display to reflect the new addressbook state
- * for the nick.
- */
-void NicksOnline::doCommand(QAction* id)
-{
-    if(id == 0)
-        return;
-    if ( id == m_addNickname )
-    {
-        int serverGroupId = -1;
-
-        if (m_nickListView->selectedItems().count())
-        {
-            NicksOnlineItem *networkRoot = dynamic_cast<NicksOnlineItem*>(m_nickListView->selectedItems().at(0));
-            if (networkRoot)
-            {
-                while (networkRoot->type() != NicksOnlineItem::NetworkRootItem)
-                    networkRoot = dynamic_cast<NicksOnlineItem*>(networkRoot->parent());
-
-                serverGroupId = networkRoot->data(0, Qt::UserRole).toInt();
-            }
-        }
-        EditNotifyDialog *end = new EditNotifyDialog(this, serverGroupId);
-        connect(end, SIGNAL(notifyChanged(int,QString)), this, SLOT(slotAddNickname(int,QString)));
-        end->show();
-        return;
-    }
-
-    QString serverName;
-    QString nickname;
-    if (m_nickListView->selectedItems().count() == 0) return;
-    QTreeWidgetItem* item = m_nickListView->selectedItems().at(0);
-    NicksOnlineItem* nickitem = dynamic_cast<NicksOnlineItem*>(item);
-
-    if(!nickitem)
+    if (!index.isValid() || !index.parent().isValid())
         return;
 
-    if ( id == m_removeNickname )
+    QString nick = index.data(NickRole).toString();
+
+    //TODO open query with this nick or reuse existing one
+}
+
+void NicksOnline::currentChanged(const QModelIndex& current, const QModelIndex& previous)
+{
+    Q_UNUSED(previous);
+
+    // find out what type of index we're selecting
+    if (!current.isValid() || !current.parent().isValid()) //none or server
     {
-      // remove watch from the tree widget
-      delete nickitem;
-      // update notify list
-      updateNotifyList();
-      return;
+        m_addNickname->setEnabled(true);
+        m_removeNickname->setEnabled(false);
+        m_newContact->setEnabled(true);
+        m_editContact->setEnabled(false);
+        m_changeAssociation->setEnabled(false);
+        m_openQuery->setEnabled(false);
+    }
+    else // nick
+    {
+        m_addNickname->setEnabled(true);
+        m_removeNickname->setEnabled(true);
+        m_newContact->setEnabled(true);
+        m_editContact->setEnabled(false);
+        m_changeAssociation->setEnabled(true);
+        m_openQuery->setEnabled(true);
     }
 
-    if (!getItemServerAndNick(item, serverName, nickname))
-      return;
+    // TODO if it's a meta contact leave all
 
-    // Get the server object corresponding to the connection id.
-    Server* server = Application::instance()->getConnectionManager()->getServerByConnectionId(nickitem->connectionId());
+    // TODO handle selection of server and meta contact or server and nick or meta contact and nick
 
-    if (!server) return;
+}
 
-    // Get NickInfo object corresponding to the nickname.
-    NickInfoPtr nickInfo = server->getNickInfo(nickname);
-    // Get addressbook entry for the nick.
-    KABC::Addressee addressee;
+void NicksOnline::activated(const QModelIndex& index)
+{
+    // open a query with the target if it's a nick, no action if it's a server
 
-    if(nickInfo)
+    if (!index.isValid() || !index.parent().isValid())
+        return;
+
+    QString nick = index.data(NickRole).toString();
+    Q_UNUSED(nick);
+    //find out if it has multiple connections
+
+        //if it does prompt user to choose
+
+        //if it doesn't open query window or reuse existing window
+
+    //TODO if it's a meta contact, with multiple connected servers, ask which one
+}
+
+void NicksOnline::collapsed(const QModelIndex& index)
+{
+    Q_UNUSED(index);
+    // record in the settings
+    // TODO set those settings to allow multiple collapse/expands for server groups
+}
+
+void NicksOnline::expanded(const QModelIndex& index)
+{
+    Q_UNUSED(index);
+    // record in the settings
+    // TODO set those settings to allow multiple collapse/expands for server groups
+}
+
+void NicksOnline::contextMenu(const QPoint& pos)
+{
+    QModelIndex index = m_nicksOnlineView->indexAt(pos);
+    if (!index.isValid()) return;
+
+    KMenu* menu = new KMenu(this);
+
+    if (index.parent().isValid())
     {
-        addressee = nickInfo->getAddressee();
+        menu->addAction(KIcon("list-add-user"), i18n("&Add Nickname..."), this, SLOT(addNickname()));
+        menu->addAction(KIcon("list-remove-user"), i18n("&Remove Nickname"), this, SLOT(removeNickname()));
+        menu->addSeparator();
+        menu->addAction(KIcon("contact-new"), i18n("Create New C&ontact..."), this, SLOT(createContact()));
+        menu->addAction(KIcon("document-edit"), i18n("Edit C&ontact..."), this, SLOT(editContact()));
+        menu->addAction(KIcon("office-address-book"), i18n("&Change Association..."), this, SLOT(changeAssociation()));
+        menu->addSeparator();
+        menu->addAction(KIcon("office-address-book"), i18n("Open &Query"), this, SLOT(openQuery()));
     }
     else
     {
-        addressee = server->getOfflineNickAddressee(nickname);
+        menu->addAction(KIcon("list-add-user"), i18n("&Add Nickname..."), this, SLOT(addNickname()));
     }
-    if ( id == m_sendMail )
-            Konversation::Addressbook::self()->sendEmail(addressee);
-    else if (  id == m_editContact )
-            Konversation::Addressbook::self()->editAddressee(addressee.uid());
-    else if ( id == m_chooseAssociation || id == m_changeAssociation )
-    {
-        LinkAddressbookUI *linkaddressbookui = NULL;
 
-        if(nickInfo)
-        {
-            linkaddressbookui = new LinkAddressbookUI(server->getViewContainer()->getWindow(), nickInfo->getNickname(), server->getServerName(), server->getDisplayName(), nickInfo->getRealName());
-        }
-        else
-        {
-            linkaddressbookui = new LinkAddressbookUI(server->getViewContainer()->getWindow(), nickname, server->getServerName(), server->getDisplayName(), addressee.realName());
-        }
+    // TODO if meta contact allow remove/open query/edit contact/choose association
 
-        linkaddressbookui->show();
-    }
-    else if ( id == m_newContact || id == m_deleteAssociation )
-    {
-            Konversation::Addressbook *addressbook = Konversation::Addressbook::self();
+    menu->exec(QCursor::pos());
 
-            if(addressbook && addressbook->getAndCheckTicket())
-            {
-                if(id == m_deleteAssociation)
-                {
-                    if (addressee.isEmpty())
-                    {
-                        return;
-                    }
-
-                    addressbook->unassociateNick(addressee, nickname, server->getServerName(), server->getDisplayName());
-                }
-                else
-                {
-                    addressee.setGivenName(nickname);
-                    addressee.setNickName(nickname);
-                    addressbook->associateNickAndUnassociateFromEveryoneElse(addressee, nickname, server->getServerName(), server->getDisplayName());
-                }
-                if(addressbook->saveTicket())
-                {
-                    //saveTicket will refresh the addressees for us.
-                    if(id == m_newContact)
-                    {
-                        Konversation::Addressbook::self()->editAddressee(addressee.uid());
-                    }
-                }
-            }
-    }
-    else if ( id == m_joinChannel )
-    {
-        if (m_nickListView->selectedItems().count() > 0)
-        {
-            // only join real channels
-            if (static_cast<NicksOnlineItem*>(m_nickListView->selectedItems().at(0))->type() == NicksOnlineItem::ChannelItem)
-            {
-                QString contactChannel = m_nickListView->selectedItems().at(0)->text(nlvcChannel);
-                server->queue( "JOIN "+contactChannel );
-            }
-        }
-    }
-    else if ( id == m_whois )
-    {
-            server->queue("WHOIS "+nickname);
-    }
-    else if ( id == m_openQuery )
-    {
-            NickInfoPtr nickInfo = server->obtainNickInfo(nickname);
-            class Query* query = server->addQuery(nickInfo, true /*we initiated*/);
-            emit showView(query);
-    }
-    else
-            refreshItem(item);
+    delete menu;
 }
-
-/**
- * Get the addressbook state of the nickname at the specified nicklistview item.
- * @param item              Item of the nicklistview.
- * @return                  Addressbook state.
- * 0 = not a nick, 1 = nick has no addressbook association, 2 = nick has association
- */
-int NicksOnline::getNickAddressbookState(QTreeWidgetItem* item)
-{
-    int nickState = nsNotANick;
-    QString serverName;
-    QString nickname;
-    if (getItemServerAndNick(item, serverName, nickname))
-    {
-        Server *server = Application::instance()->getConnectionManager()->getServerByName(serverName);
-        if (!server) return nsNotANick;
-        NickInfoPtr nickInfo = server->getNickInfo(nickname);
-        if (nickInfo)
-        {
-            if (nickInfo->getAddressee().isEmpty())
-                nickState = nsNoAddress;
-            else
-                nickState = nsHasAddress;
-        }
-        else
-        {
-            if (server->getOfflineNickAddressee(nickname).isEmpty())
-                nickState = nsNoAddress;
-            else
-                nickState = nsHasAddress;
-        }
-    }
-    return nickState;
-}
-
-/**
- * Sets up toolbar actions based on the given item.
- * @param item              Item of the nicklistview.
- */
-void NicksOnline::setupToolbarActions(NicksOnlineItem *item)
-{
-  // disable all actions
-  m_removeNickname->setEnabled(false);
-  m_newContact->setEnabled(false);
-  m_editContact->setEnabled(false);
-  m_chooseAssociation->setEnabled(false);
-  m_changeAssociation->setEnabled(false);
-  m_deleteAssociation->setEnabled(false);
-  m_whois->setEnabled(false);
-  m_openQuery->setEnabled(false);
-  m_sendMail->setEnabled(false);
-  m_joinChannel->setEnabled(false);
-  // check for null
-  if (item == 0)
-    return;
-  // add items depending on the item type
-  switch (item->type())
-  {
-  case NicksOnlineItem::ChannelItem:
-    m_joinChannel->setEnabled(true);
-    break;
-  case NicksOnlineItem::NicknameItem:
-    m_removeNickname->setEnabled(true);
-    int nickState = getNickAddressbookState(item);
-    if (nickState == nsNoAddress)
-    {
-      m_chooseAssociation->setEnabled(true);
-      m_newContact->setEnabled(true);
-    }
-    else if (nickState == nsHasAddress)
-    {
-      m_changeAssociation->setEnabled(true);
-      m_deleteAssociation->setEnabled(true);
-      m_editContact->setEnabled(true);
-      m_sendMail->setEnabled(true);
-    }
-    if (!item->isOffline())
-    {
-      m_whois->setEnabled(true);
-      m_openQuery->setEnabled(true);
-    }
-    break;
-  }
-}
-
-/**
- * Sets up popup menu actions based on the given item.
- * @param item              Item of the nicklistview.
- */
-void NicksOnline::setupPopupMenuActions(NicksOnlineItem *item)
-{
-  // clear the popup menu
-  m_popupMenu->clear();
-  // check for null
-  if (item == 0)
-    return;
-  // add items depending on the item type
-  switch (item->type())
-  {
-  case NicksOnlineItem::NetworkRootItem:
-    m_popupMenu->insertAction(0, m_addNickname);
-    break;
-  case NicksOnlineItem::ChannelItem:
-    m_popupMenu->insertAction(0, m_joinChannel);
-    break;
-  case NicksOnlineItem::NicknameItem:
-    m_popupMenu->insertAction(0, m_removeNickname);
-    int nickState = getNickAddressbookState(item);
-    if (nickState == nsNoAddress)
-    {
-      m_popupMenu->addSeparator();
-      m_popupMenu->insertAction(0, m_newContact);
-      m_popupMenu->addSeparator();
-      m_popupMenu->insertAction(0, m_chooseAssociation);
-    }
-    else if (nickState == nsHasAddress)
-    {
-      m_popupMenu->addSeparator();
-      m_popupMenu->insertAction(0, m_editContact);
-      m_popupMenu->addSeparator();
-      m_popupMenu->insertAction(0, m_changeAssociation);
-      m_popupMenu->insertAction(0, m_deleteAssociation);
-      m_popupMenu->addSeparator();
-      m_popupMenu->insertAction(0, m_sendMail);
-    }
-    if (!item->isOffline())
-    {
-      m_popupMenu->addSeparator();
-      m_popupMenu->insertAction(0, m_whois);
-      m_popupMenu->insertAction(0, m_openQuery);
-    }
-    break;
-  }
-}
-
-/**
- * Received when user selects a different item in the nicklistview.
- */
-void NicksOnline::slotNickListView_SelectionChanged()
-{
-    if (m_nickListView->selectedItems().count() == 0)
-      return;
-    setupToolbarActions(dynamic_cast<NicksOnlineItem*>(m_nickListView->selectedItems().at(0)));
-}
-
-/**
- * Received when right-clicking an item in the NickListView.
- */
-void NicksOnline::slotCustomContextMenuRequested(const QPoint& point)
-{
-    QTreeWidgetItem *item = m_nickListView->itemAt(point);
-    if (item == 0)
-      return;
-    // select the item
-    item->setSelected(true);
-    // set up actions
-    setupPopupMenuActions(dynamic_cast<NicksOnlineItem*>(item));
-    // show the popup menu
-    if (m_popupMenu->actions().count() > 0)
-      m_popupMenu->popup(QCursor::pos());
-}
-
-/**
- * Received from popup menu when user chooses something.
- */
-void NicksOnline::slotPopupMenu_Activated(QAction* id)
-{
-    doCommand(id);
-}
-
-/**
- * Received from server when a NickInfo changes its information.
- */
-void NicksOnline::slotNickInfoChanged(Server* server, const NickInfoPtr nickInfo)
-{
-    if (!nickInfo) return;
-    QString nickname = nickInfo->getNickname();
-
-    if (!server) return;
-    QString serverName = server->getServerName();
-    QTreeWidgetItem* item = getServerAndNickItem(serverName, nickname);
-    refreshItem(item);
-}
-
-/**
- * Received when user added a new nick to the watched nicks.
- */
-void NicksOnline::slotAddNickname(int serverGroupId, const QString& nickname)
-{
-    //Preferences::addNotify(serverGroupId, nickname);
-    //static_cast<Application*>(kapp)->saveOptions(true);
-}
-
-/**
- * Refreshes the information for the given item in the list.
- * @param item               Pointer to listview item.
- */
-void NicksOnline::refreshItem(QTreeWidgetItem* item)
-{
-    if (!item)
-        return;
-    QString serverName;
-    QString nickname;
-    if (getItemServerAndNick(item, serverName, nickname))
-    {
-        Server *server = Application::instance()->getConnectionManager()->getServerByName(serverName);
-        if (server)
-        {
-            NickInfoPtr nickInfo = server->getNickInfo(nickname);
-            KABC::Addressee addressee;
-            int nickState = nsNoAddress;
-            if (nickInfo)
-                addressee = nickInfo->getAddressee();
-            else
-                addressee = server->getOfflineNickAddressee(nickname);
-            if (!addressee.isEmpty())
-                nickState = nsHasAddress;
-
-            switch (nickState)
-            {
-                case nsNotANick:
-                    break;
-                case nsNoAddress:
-                {
-                    item->setIcon(nlvcKabc, QIcon(m_kabcIconSet.pixmap(
-                        KIconLoader::Small, QIcon::Disabled, QIcon::Off)));
-                    break;
-                }
-                case nsHasAddress:
-                {
-                    item->setIcon(nlvcKabc, QIcon(m_kabcIconSet.pixmap(
-                        KIconLoader::Small, QIcon::Normal, QIcon::On))); break;
-                }
-            }
-            QString nickAdditionalInfo;
-            bool needWhois = false;
-            if (nickInfo)
-                nickAdditionalInfo = getNickAdditionalInfo(nickInfo, addressee, needWhois);
-            item->setText(nlvcAdditionalInfo, nickAdditionalInfo);
-            if (m_nickListView->selectedItems().count() != 0 && item == m_nickListView->selectedItems().at(0))
-                setupToolbarActions(dynamic_cast<NicksOnlineItem*>(m_nickListView->selectedItems().at(0)));
-        }
-    }
-}
-
-void NicksOnline::childAdjustFocus() {}
 
 #include "nicksonline.moc"
-
-// kate: space-indent on; tab-width 4; indent-width 4; mixed-indent off; replace-tabs on;
-// vim: set et sw=4 ts=4 cino=l1,cs,U1:

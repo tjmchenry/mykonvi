@@ -235,9 +235,10 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
         }
         else // Server group item
         {
-            Konversation::ServerGroupSettingsPtr serverGroup = m_serverGroupList.at(row);
-            if (serverGroup)
+            if (row > 0 && row < m_serverGroupList.size())
             {
+                Konversation::ServerGroupSettingsPtr serverGroup = m_serverGroupList.at(row);
+
                 if (rows.at(pos) < 0 && m_serverGroupHash.contains(*i)) // dropping server group on server group, insert above target
                 {
                     m_serverGroupList.move(m_serverGroupList.indexOf(m_serverGroupHash[*i]), parent.row());

@@ -342,14 +342,17 @@ int ServerGroupModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid() && !parent.parent().isValid() && m_serverGroupList.count() > parent.row())
     {
-        if (parent.column() == 0)
-            return m_serverGroupList[parent.row()]->serverList().count();
-        else if (parent.column() == 1)
-            return m_serverGroupList[parent.row()]->notifyList().count();
-        else if (parent.column() == 2)
-            return m_serverGroupList[parent.row()]->channelList().count();
-        else
-            return 0;
+        switch (parent.column())
+        {
+            case 0:
+                return m_serverGroupList[parent.row()]->serverList().count();
+            case 1:
+                return m_serverGroupList[parent.row()]->notifyList().count();
+            case 2:
+                return m_serverGroupList[parent.row()]->channelList().count();
+            default:
+                return 0;
+        }
     }
 
     if (!parent.isValid())
@@ -487,14 +490,17 @@ bool ServerGroupModel::hasChildren(const QModelIndex& index) const
 
     if (index.isValid() && !index.parent().isValid() && m_serverGroupList.count() > index.row()) // server group index
     {
-        if (index.column() == 0)
-            return (m_serverGroupList[index.row()]->serverList().count() > 0);
-        else if (index.column() == 1)
-            return (m_serverGroupList[index.row()]->notifyList().count() > 0);
-        else if (index.column() == 2)
-            return (m_serverGroupList[index.row()]->channelList().count() > 0);
-        else
-            return false;
+        switch (index.column())
+        {
+            case 0:
+                return (m_serverGroupList[index.row()]->serverList().count() > 0);
+            case 1:
+                return (m_serverGroupList[index.row()]->notifyList().count() > 0);
+            case 2:
+                return (m_serverGroupList[index.row()]->channelList().count() > 0);
+            default:
+                return false;
+        }
     }
     else if(!index.isValid()) // root index
         return (m_serverGroupHash.count() > 0);

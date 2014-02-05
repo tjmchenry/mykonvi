@@ -136,7 +136,7 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
         return true;
 
     if (!(data->hasFormat("application/servergroup.id") && data->hasFormat("application/servergroup.row") && data->hasFormat("application/servergroup.column"))
-        || column >= columnCount(parent) || row >= rowCount(parent))
+        || column >= columnCount(parent) || row > rowCount(parent))
         return false;
 
     QByteArray serverGroupId = data->data("application/servergroup.id");
@@ -171,122 +171,292 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
     int pos = 0;
     for (i = serverGroupIds.constBegin(); i != serverGroupIds.constEnd(); ++i)
     {
+        //TODO if the list contains their parent ignore it
+
         if (parent.isValid()) // dropped on server item
         {
-            if (rows.at(pos) < 0 && m_serverGroupHash.contains(*i)) // dropped servergroup on server item, drop below server group of child item 
-            {
-                m_serverGroupList.move(m_serverGroupList.indexOf(m_serverGroupHash[*i]), parent.row()+1);
-            }
-            else // dropped server on a server
-            {
-                Konversation::ServerGroupSettingsPtr serverGroup = m_serverGroupList.at(parent.row());
-                if (serverGroup && serverGroup->id() != *i && m_serverGroupHash.contains(*i)) //dropped a child on another server group's child item
-                {
-                    if (columns.at(pos) == 0  && m_serverGroupHash.value(*i)->serverList().count() > rows.at(pos)) // dropped a server on another server group's children
-                    {
-                        int index = row;
-                        if (index < 0) index = 0;
-                        if (index > serverGroup->serverList().count()) index = serverGroup->serverList().count();
-                        serverGroup->insertServer(index, m_serverGroupHash.value(*i)->serverByIndex(rows.at(pos)));
-                        m_serverGroupHash[*i]->removeServerByIndex(rows.at(pos));
-                    }
-                    else if (columns.at(pos) == 1 && m_serverGroupHash.value(*i)->notifyList().count() > rows.at(pos)) // dropped a notify nick on another servergroup's children
-                    {
-                        int index = row;
-                        if (index < 0) index = 0;
-                        if (index > serverGroup->notifyList().count()) index = serverGroup->notifyList().count();
-                        serverGroup->insertNotify(index, m_serverGroupHash.value(*i)->notifyByIndex(rows.at(pos)));
-                        m_serverGroupHash[*i]->removeNotifyByIndex(rows.at(pos));
-                    }
-                    else // dropped a channel on another server group's children, or source had an invalid row/column number
-                        return false;
-                }
-                else if (serverGroup && serverGroup->id() == *i) // dropped a child on a child of the same server group
-                {
-                    if (columns.at(pos) == 0 && serverGroup->serverList().count() > rows.at(pos)) // dropped a server on a child in the same server group
-                    {
-                        int index = row;
-                        if (index < 0) index = 0;
-                        if (index > serverGroup->serverList().count()) index = serverGroup->serverList().count();
-                        serverGroup->moveServer(rows.at(pos), index);
-                    }
-                    else if (columns.at(pos) == 1 && serverGroup->notifyList().count() > rows.at(pos)) // dropped a notify nick on a child in the same server group
-                    {
-                        int index = row;
-                        if (index < 0) index = 0;
-                        if (index > serverGroup->notifyList().count()) index = serverGroup->notifyList().count();
-                        serverGroup->moveNotify(rows.at(pos), index);
-                    }
-                    else if (columns.at(pos) == 2 && serverGroup->channelList().count() > rows.at(pos)) // dropped a channel on a child in the same server group
-                    {
-                        int index = row;
-                        if (index < 0) index = 0;
-                        if (index > serverGroup->channelList().count()) index = serverGroup->channelList().count();
-                        serverGroup->moveChannel(rows.at(pos), index);
-                    }
-                    else // source had an invalid row/column number
-                        return false;
-                }
-                else // servergroup didn't exist, or server group target id was invalid, or server item source index was invalid
-                    return false;
+            QModelIndex newParent;
 
-                //TODO signal dataChanged for the affected rows (including resorted ones)
-            }
-        }
-        else // Server group item
-        {
-            if (row > 0 && row < m_serverGroupList.size())
-            {
-                Konversation::ServerGroupSettingsPtr serverGroup = m_serverGroupList.at(row);
+            if (parent.parent().isValid())
+                newParent = parent.parent();
+            else
+                newParent = parent;
 
-                if (rows.at(pos) < 0 && m_serverGroupHash.contains(*i)) // dropping server group on server group, insert above target
+            Konversation::ServerGroupSettingsPtr serverGroup;
+
+            if (*i >= 0 && m_serverGroupHash.contains(*i))
+                serverGroup = m_serverGroupHash[*i];
+            else if (*i < 0 && rows.at(pos) < m_serverGroupList.count())
+                serverGroup = m_serverGroupList.at(rows.at(pos));
+
+            if (serverGroup)
+            {
+                int sourceRow = rows.at(pos);
+
+                if (*i < 0) // dropped servergroup on server item, drop below server group of child item
                 {
-                    m_serverGroupList.move(m_serverGroupList.indexOf(m_serverGroupHash[*i]), parent.row());
-                }
-                else // dropping server on server group, insert at top
-                {
-                    if (serverGroupIds.at(pos) != serverGroup->id() && m_serverGroupHash.contains(serverGroupIds.at(pos))) // dropping a child on a different server group
+                    int newRow = row;
+                    int moveRow = row;
+
+                    if (newRow < 0 || newRow >= m_serverGroupList.count()) // inserting at the very end
                     {
-                        if (columns.at(pos) == 0 && m_serverGroupHash.value(serverGroupIds.at(pos))->serverList().count() > rows.at(pos)) // dropping server on a different server group
+                        newRow = (m_serverGroupList.count() - 1);
+                        moveRow = m_serverGroupList.count();
+                    }
+
+                    //QModelIndex sourceParent = ServerGroupModel::index(sourceRow, columns.at(pos), QModelIndex());
+                    // FIXME source parent is root index right? so QModelIndex() should work here
+                    if (!beginMoveRows(QModelIndex(), sourceRow, sourceRow, newParent, moveRow))
+                        return false;
+
+                    m_serverGroupList.move(sourceRow, newRow);
+
+                    endMoveRows();
+                }
+                else if (newParent.row() >= 0 && newParent.row() < m_serverGroupList.count()) // dropped child on child
+                {
+                    QModelIndex sourceParent = ServerGroupModel::index(m_serverGroupList.indexOf(serverGroup), columns.at(pos), QModelIndex());
+
+                    Konversation::ServerGroupSettingsPtr newServerGroup = m_serverGroupList.at(newParent.row());
+
+                    int newRow = row;
+                    int moveRow = row;
+
+                    if (parent.parent().isValid())
+                    {
+                        switch (row)
                         {
-                            serverGroup->insertServer(0, m_serverGroupHash.value(*i)->serverByIndex(rows.at(pos)));
-                            m_serverGroupHash[*i]->removeServerByIndex(rows.at(pos));
-
-                            // TODO announce datachanged
+                            case -1:
+                            case 0:
+                                newRow = parent.row();
+                                moveRow = newRow;
+                                break;
+                            case 1:
+                            default:
+                                moveRow = parent.row();
+                                newRow = moveRow + 1;
+                                break;
                         }
-                        else if (columns.at(pos) == 1 && m_serverGroupHash.value(serverGroupIds.at(pos))->notifyList().count() > rows.at(pos)) // dropping a notify nick on a differetn server group
+                    }
+
+                    if (newRow < 0)
+                    {
+                        moveRow = 0;
+                        newRow = 0;
+                    }
+
+                    if (newServerGroup && serverGroup->id() != newServerGroup->id()) // dropped a child on another server group's child item
+                    {
+                        if (columns.at(pos) == 0  && serverGroup->serverList().count() > sourceRow) // dropped a server on another server group's children
                         {
-                            serverGroup->insertNotify(0, m_serverGroupHash.value(*i)->notifyByIndex(rows.at(pos)));
-                            m_serverGroupHash[*i]->removeNotifyByIndex(rows.at(pos));
+                            if (newRow >= newServerGroup->serverList().count()) // inserting at the end
+                            {
+                                moveRow = newServerGroup->serverList().count();
+                                newRow = moveRow - 1;
+                            }
+
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
+                                return false;
+
+                            newServerGroup->insertServer(newRow, serverGroup->serverByIndex(sourceRow));
+                            serverGroup->removeServerByIndex(sourceRow);
+
+                            endMoveRows();
+                        }
+                        else if (columns.at(pos) == 1 && serverGroup->notifyList().count() > sourceRow) // dropped a notify nick on another servergroup's children
+                        {
+                            if (newRow >= newServerGroup->notifyList().count()) // inserting at the end
+                            {
+                                moveRow = newServerGroup->notifyList().count();
+                                newRow = moveRow - 1;
+                            }
+
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
+                                return false;
+
+                            newServerGroup->insertNotify(newRow, serverGroup->notifyByIndex(sourceRow));
+                            serverGroup->removeNotifyByIndex(sourceRow);
+
+                            endMoveRows();
+                        }
+                        else // dropped a channel on another server group's children, or source had an invalid row/column number
+                            return false;
+                    }
+                    else if (newServerGroup && serverGroup->id() == newServerGroup->id()) // dropped a child on a child of the same server group
+                    {
+                        if (columns.at(pos) == 0 && serverGroup->serverList().count() > sourceRow) // dropped a server on a child in the same server group
+                        {
+                            if (newRow >= serverGroup->serverList().count()) // inserting at the end
+                            {
+                                moveRow = serverGroup->serverList().count();
+                                newRow = moveRow - 1;
+                            }
+
+                            if (sourceRow < newRow) // if moving down in the same parent,the newRow will be placed -before- the moveRow
+                                moveRow = newRow + 1;
+
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
+                                return false;
+
+                            serverGroup->moveServer(sourceRow, newRow);
+
+                            endMoveRows();
+                        }
+                        else if (columns.at(pos) == 1 && serverGroup->notifyList().count() > sourceRow) // dropped a notify nick on a child in the same server group
+                        {
+                            if (newRow >= serverGroup->notifyList().count()) // inserting at the end
+                            {
+                                moveRow = serverGroup->notifyList().count();
+                                newRow = moveRow - 1;
+                            }
+
+                            if (sourceRow < newRow) // if moving down in the same parent,the newRow will be placed -before- the moveRow
+                                moveRow = newRow + 1;
+
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
+                                return false;
+
+                            serverGroup->moveNotify(sourceRow, newRow);
+
+                            endMoveRows();
+                        }
+                        else if (columns.at(pos) == 2 && serverGroup->channelList().count() > sourceRow) // dropped a channel on a child in the same server group
+                        {
+                            if (newRow >= serverGroup->channelList().count()) // inserting at the end
+                            {
+                                moveRow = serverGroup->channelList().count();
+                                newRow = moveRow - 1;
+                            }
+
+                            if (sourceRow < newRow) // if moving down in the same parent,the newRow will be placed -before- the moveRow
+                                moveRow = newRow + 1;
+
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
+                                return false;
+
+                            serverGroup->moveChannel(sourceRow, newRow);
+
+                            endMoveRows();
+                        }
+                        else // source had an invalid row/column number
+                            return false;
+                    }
+                    else // servergroup didn't exist, or server group target id was invalid, or server item source index was invalid
+                        return false;
+
+                    //TODO signal dataChanged for the affected rows (including resorted ones)
+                }
+                else // new parent row had an invalid row
+                    return false;
+            }
+            else // server group id was invalid
+                return false;
+        }
+        else // Server group item or invalid target
+        {
+            Konversation::ServerGroupSettingsPtr serverGroup;
+
+            if (*i >= 0 && m_serverGroupHash.contains(*i))
+                serverGroup = m_serverGroupHash[*i];
+            else if (*i < 0 && rows.at(pos) < m_serverGroupList.count())
+                serverGroup = m_serverGroupList.at(rows.at(pos));
+
+            if (serverGroup)
+            {
+                if (*i < 0) // dropping server group on server group, insert above target
+                {
+                    int sourceRow = m_serverGroupList.indexOf(serverGroup);
+                    int newRow = row;
+                    int moveRow = row;
+
+                    if (newRow < 0 || newRow >= m_serverGroupList.count()) // inserting at the very end
+                    {
+                        newRow = (m_serverGroupList.count() - 1);
+                        moveRow = m_serverGroupList.count();
+                    }
+
+                    if (!beginMoveRows(QModelIndex(), sourceRow, sourceRow, QModelIndex(), moveRow))
+                        return false;
+
+                    m_serverGroupList.move(sourceRow, newRow);
+
+                    endMoveRows();
+                }
+                else if (row >= 0 && row < m_serverGroupList.count()) // dropping child on server group, insert at top
+                {
+                    Konversation::ServerGroupSettingsPtr newServerGroup = m_serverGroupList.at(row);
+
+                    QModelIndex sourceParent = ServerGroupModel::index(m_serverGroupList.indexOf(serverGroup), columns.at(pos), QModelIndex());
+                    QModelIndex newParent = ServerGroupModel::index(row, column, QModelIndex());
+                    int sourceRow = rows.at(pos);
+                    int newRow = 0;
+
+                    if (newServerGroup && serverGroup->id() != newServerGroup->id()) // dropping a child on a different server group
+                    {
+                        if (columns.at(pos) == 0 && serverGroup->serverList().count() > sourceRow) // dropping server on a different server group
+                        {
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, newRow))
+                                return false;
+
+                            newServerGroup->insertServer(newRow, serverGroup->serverByIndex(sourceRow));
+                            serverGroup->removeServerByIndex(sourceRow);
+
+                            endMoveRows();
+                        }
+                        else if (columns.at(pos) == 1 && serverGroup->notifyList().count() > sourceRow) // dropping a notify nick on a different server group
+                        {
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, newRow))
+                                return false;
+
+                            newServerGroup->insertNotify(newRow, serverGroup->notifyByIndex(sourceRow));
+                            serverGroup->removeNotifyByIndex(sourceRow);
+
+                            endMoveRows();
                         }
                         else // dropping a channel on a different server group, or source had invalid row/column numbers
                             return false;
                     }
-                    else if (serverGroupIds.at(pos) == serverGroup->id()) // dropping a child item on the same server group
+                    else if (newServerGroup && serverGroup->id() == newServerGroup->id()) // dropping a child item on the same server group
                     {
-                        if (columns.at(pos) == 0 && serverGroup->serverList().count() > rows.at(pos)) // dropping server on the same server group
+                        if (columns.at(pos) == 0 && serverGroup->serverList().count() > sourceRow) // dropping server on the same server group
                         {
-                            serverGroup->moveServer(rows.at(pos), 0);
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, newRow))
+                                return false;
 
-                            // TODO announce datachanged
+                            serverGroup->moveServer(sourceRow, newRow);
+
+                            endMoveRows();
                         }
-                        else if (columns.at(pos) == 1 && serverGroup->notifyList().count() > rows.at(pos)) // dropping a notify nick on the same server group
+                        else if (columns.at(pos) == 1 && serverGroup->notifyList().count() > sourceRow) // dropping a notify nick on the same server group
                         {
-                            serverGroup->moveNotify(rows.at(pos), 0);
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, newRow))
+                                return false;
+
+                            serverGroup->moveNotify(sourceRow, newRow);
+
+                            endMoveRows();
                         }
-                        else if (columns.at(pos) == 2 && serverGroup->channelList().count() > rows.at(pos)) // dropping a channel on the same server group
+                        else if (columns.at(pos) == 2 && serverGroup->channelList().count() > sourceRow) // dropping a channel on the same server group
                         {
-                            serverGroup->moveChannel(rows.at(pos), 0);
+                            if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, newRow))
+                                return false;
+
+                            serverGroup->moveChannel(sourceRow, newRow);
+
+                            endMoveRows();
                         }
                         else // source had invalid row/column
                             return false;
                     }
-                    else // source sever group id is invalid, or source server id was invalid
+                    else // source sever group id is invalid
                         return false;
                 }
+                else // dropping server on invalid target
+                {
+                    //FIXME drop at bottom?
+                    return false;
+                }
             }
-            else // server group was null
-                return false;
         }
 
         pos++;
@@ -323,10 +493,7 @@ QMimeData* ServerGroupModel::mimeData(const QModelIndexList &indexes) const
             int serverGroupId = index.internalId();
             serverGroupIdStream << serverGroupId;
 
-            if (index.parent().isValid())
-                rowStream << index.row();
-            else
-                rowStream << -1;
+            rowStream << index.row();
 
             columnStream << index.column();
         }
@@ -448,7 +615,7 @@ QVariant ServerGroupModel::data(const QModelIndex& index, int role) const
         }
     }
 
-    if (index.internalId() < 0 && role == Qt::DisplayRole) // server group item
+    if (index.internalId() < 0 && index.row() < m_serverGroupList.count()) // server group item
     {
         Konversation::ServerGroupSettingsPtr serverGroup = m_serverGroupList.at(index.row());
 

@@ -68,6 +68,8 @@ namespace Konversation
         //because it sorts the first column in ascending order by default
         //causing problems and such.
         m_serverList->selectionModel()->select(m_serverModel->index(0, 0), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
+        restoreExpandedStates();
     }
 
     ServerListDialog::~ServerListDialog()
@@ -75,6 +77,21 @@ namespace Konversation
         KConfigGroup config(KGlobal::config(), "ServerListDialog");
         config.writeEntry("Size", size());
         config.writeEntry("ServerListHeaderState", m_serverList->header()->saveState());
+    }
+
+    void ServerListDialog::restoreExpandedStates()
+    {
+        m_serverList->setUpdatesEnabled(false);
+        QModelIndex start = m_serverModel->index(0, 0);
+        QModelIndexList parentItems = m_serverModel->match(start, ServerGroupModel::IsServerRole, 0, -1, Qt::MatchExactly | Qt::MatchWrap);
+
+        foreach (QModelIndex parent, parentItems)
+        {
+            bool expanded = m_serverModel->data(parent, ServerGroupModel::ExpandedRole).toBool();
+            m_serverList->setExpanded(parent, expanded);
+        }
+
+        m_serverList->setUpdatesEnabled(true);
     }
 
     void ServerListDialog::slotClose()

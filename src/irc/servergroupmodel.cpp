@@ -768,6 +768,8 @@ QVariant ServerGroupModel::data(const QModelIndex& index, int role) const
 
     if (index.parent().isValid() && m_serverGroupHash.contains(index.internalId())) // child item
     {
+        Konversation::ServerGroupSettingsPtr serverGroup = m_serverGroupHash[index.internalId()];
+
         if (role == Qt::DisplayRole)
         {
             Konversation::ServerSettings server;
@@ -776,7 +778,7 @@ QVariant ServerGroupModel::data(const QModelIndex& index, int role) const
             switch (index.column())
             {
                 case 0:
-                    server = m_serverGroupHash[index.internalId()]->serverByIndex(index.row());
+                    server = serverGroup->serverByIndex(index.row());
                     serverName = server.host();
 
                     if (server.port() != 6667)
@@ -787,16 +789,20 @@ QVariant ServerGroupModel::data(const QModelIndex& index, int role) const
 
                     return serverName;
                 case 1:
-                    return m_serverGroupHash[index.internalId()]->notifyByIndex(index.row());
+                    return serverGroup->notifyByIndex(index.row());
                 case 2:
-                    return m_serverGroupHash[index.internalId()]->channelByIndex(index.row()).name();
+                    return serverGroup->channelByIndex(index.row()).name();
                 default:
                     return QVariant();
             }
         }
         else if (role == ServerGroupIdRole)
         {
-            return index.internalId();
+            return serverGroup->id();
+        }
+        else if (role == IsServerRole)
+        {
+            return 1;
         }
     }
 
@@ -821,6 +827,14 @@ QVariant ServerGroupModel::data(const QModelIndex& index, int role) const
         else if (role == ServerGroupIdRole)
         {
             return serverGroup->id();
+        }
+        else if (role == ExpandedRole)
+        {
+            return serverGroup->expanded();
+        }
+        else if (role == IsServerRole)
+        {
+            return 0;
         }
     }
 

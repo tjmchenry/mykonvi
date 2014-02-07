@@ -310,8 +310,10 @@ namespace Konversation
         Preferences::addServerGroup(serverGroup);
 
         int row = m_serverModel->getServerGroupIndexById(serverGroup->id());
-        //FIXME this row is from the source model, not the filtered m_serverModel needs mapFromSource
-        m_serverList->selectionModel()->select(m_serverModel->index(row, 0), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        QModelIndex srcIndex = m_serverModel->sourceModel()->index(row, 0);
+        QModelIndex index = m_serverModel->mapFromSource(srcIndex);
+
+        m_serverList->selectionModel()->select(index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
     }
 
     void ServerListDialog::setShowAtStartup(bool show)

@@ -57,8 +57,6 @@ QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
     if (!index.isValid() || index.row() >= rowCount(index.parent()))
         return QVariant();
 
-    //if (role == Qt::DisplayRole) return mapToSource(index).data().toString();
-
     if (!index.parent().isValid()) //top level item
     {
         if (role == Qt::DisplayRole && mapToSource(index).internalId() < 0)
@@ -96,8 +94,6 @@ QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
                     return QVariant();
             }
         }
-        else
-            return QVariant();
     }
     else
     {
@@ -180,7 +176,7 @@ QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
         }
     }
 
-    return QVariant();
+    return QSortFilterProxyModel::data(index, role);
 }
 
 QVariant NicksOnlineFilterModel::headerData(int section, Qt::Orientation orientation, int role) const
@@ -581,14 +577,11 @@ NicksOnline::NicksOnline(QWidget* parent) : ChatWindow(parent)
 
     Preferences::restoreColumnState(m_nicksOnlineView, "NicksOnline ViewSettings");
 
-    connect(m_toolBar, SIGNAL(actionTriggered(QAction*)), this, SLOT(slotPopupMenu_Activated(QAction*)));
-
     connect(m_nicksOnlineView, SIGNAL(activated(QModelIndex)), this, SLOT(activated(QModelIndex)));
     connect(m_nicksOnlineView->selectionModel(), SIGNAL(currentChanged(QModelIndex, QModelIndex)), this, SLOT(currentChanged(QModelIndex, QModelIndex)));
     connect(m_nicksOnlineView, SIGNAL(collapsed(QModelIndex)), this, SLOT(collapsed(QModelIndex)));
     connect(m_nicksOnlineView, SIGNAL(expanded(QModelIndex)), this, SLOT(expanded(QModelIndex)));
     connect(m_nicksOnlineView, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextMenu(QPoint)));
-
 }
 
 NicksOnline::~NicksOnline()

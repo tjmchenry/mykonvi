@@ -59,6 +59,7 @@ namespace Konversation
         private:
             int selectedChildrenCount(const QModelIndex& parent);
             void restoreExpandedStates();
+            void restoreSpannedState();
 
             ServerGroupFilterModel* m_serverModel;
 

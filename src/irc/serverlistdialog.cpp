@@ -70,6 +70,8 @@ namespace Konversation
         m_serverList->selectionModel()->select(m_serverModel->index(0, 0), QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
 
         restoreExpandedStates();
+
+        restoreSpannedState();
     }
 
     ServerListDialog::~ServerListDialog()
@@ -89,6 +91,28 @@ namespace Konversation
         {
             bool expanded = m_serverModel->data(parent, ServerGroupModel::ExpandedRole).toBool();
             m_serverList->setExpanded(parent, expanded);
+        }
+
+        m_serverList->setUpdatesEnabled(true);
+    }
+
+    void ServerListDialog::restoreSpannedState()
+    {
+        m_serverList->setUpdatesEnabled(false);
+
+        QModelIndex start = m_serverModel->index(0, 0);
+        QModelIndexList parentItems = m_serverModel->match(start, ServerGroupModel::IsServerRole, 0, -1, Qt::MatchExactly | Qt::MatchWrap);
+
+        foreach (QModelIndex parent, parentItems)
+        {
+            start = parent.child(0, 0);
+            QModelIndexList childItems = m_serverModel->match(start, ServerGroupModel::IsServerRole, 1, -1, Qt::MatchExactly | Qt::MatchWrap);
+
+            foreach (QModelIndex child, childItems)
+            {
+                m_serverList->setFirstColumnSpanned(child.row(), child.parent(), true);
+            }
+
         }
 
         m_serverList->setUpdatesEnabled(true);
@@ -132,6 +156,8 @@ namespace Konversation
             emit serverGroupsChanged(dlg->serverGroupSettings());
         }
         delete dlg;
+
+        restoreSpannedState();
     }
 
     void ServerListDialog::slotEdit()
@@ -171,6 +197,8 @@ namespace Konversation
 
                 delete dlg;
             }
+
+            restoreSpannedState();
         }
     }
 

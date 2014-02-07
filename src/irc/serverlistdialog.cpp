@@ -279,13 +279,17 @@ namespace Konversation
 
             QModelIndexList selected = m_serverList->selectionModel()->selectedRows(0);
 
-            foreach (QModelIndex index, selected)
+            bool selectParent = true;
+            foreach (QModelIndex i, selected)
             {
-                if (index.parent() == index)
+                if (i.parent() == index)
                 {
-                    m_serverList->selectionModel()->select(index, QItemSelectionModel::Select | QItemSelectionModel::Rows);
+                    m_serverList->selectionModel()->select(i, QItemSelectionModel::Deselect);
                 }
             }
+
+            if (selectParent)
+                m_serverList->selectionModel()->select(index, QItemSelectionModel::Select | QItemSelectionModel::Rows);
         }
     }
 

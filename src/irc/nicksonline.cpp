@@ -63,7 +63,10 @@ QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
     {
         if (role == Qt::DisplayRole && mapToSource(index).internalId() < 0)
         {
-            int sgId = mapToSource(index).row();
+            ServerGroupModel* source = static_cast<ServerGroupModel*>(sourceModel());
+            Konversation::ServerGroupSettingsPtr serverGroup = source->getServerGroupByIndex(mapToSource(index).row());
+            int sgId = serverGroup->id();
+
             QStringList serverNames = QStringList();
 
             if (m_connectionManager->getConnectedServerGroups().count(sgId) > 0)
@@ -79,20 +82,7 @@ QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
                     ++i;
                 }
             }
-/* removed in favor of above method, keeping for now in case above needs debugging
-            if (m_connectionManager->connectionCount() > 0)
-            {
-                QList<Server*>::const_iterator i;
 
-                for (i = m_connectionManager->getServerList().constBegin(); i != m_connectionManager->getServerList().constEnd(); ++i)
-                {
-                    if (sgId == (*i)->getServerGroup()->id())
-                    {
-                        serverNames.append((*i)->getServerName());
-                    }
-                }
-            }
-*/
             switch (index.column())
             {
                 case 0:

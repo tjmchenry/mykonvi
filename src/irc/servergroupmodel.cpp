@@ -770,10 +770,22 @@ QVariant ServerGroupModel::data(const QModelIndex& index, int role) const
     {
         if (role == Qt::DisplayRole)
         {
+            Konversation::ServerSettings server;
+            QString serverName;
+
             switch (index.column())
             {
                 case 0:
-                    return m_serverGroupHash[index.internalId()]->serverByIndex(index.row()).host();
+                    server = m_serverGroupHash[index.internalId()]->serverByIndex(index.row());
+                    serverName = server.host();
+
+                    if (server.port() != 6667)
+                        serverName += ':' + QString::number(server.port());
+
+                    if (server.SSLEnabled())
+                        serverName += " (SSL)";
+
+                    return serverName;
                 case 1:
                     return m_serverGroupHash[index.internalId()]->notifyByIndex(index.row());
                 case 2:

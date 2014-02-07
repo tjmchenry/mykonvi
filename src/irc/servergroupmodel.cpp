@@ -80,10 +80,24 @@ void ServerGroupModel::addServerGroup(int serverGroupId, Konversation::ServerGro
 {
     if (serverGroup && serverGroupId >= 0)
     {
+        bool replace = true;
+
         if (m_serverGroupHash.contains(serverGroupId))
+        {
+            if (m_serverGroupHash[serverGroupId] != serverGroup)
+            {
+                // TODO find out if there are more or fewer rows
+            }
+
             m_serverGroupList.replace(m_serverGroupList.indexOf(m_serverGroupHash[serverGroupId]), serverGroup);
+        }
         else
+        {
+            replace = false;
+            beginInsertRows(QModelIndex(), m_serverGroupList.count(), m_serverGroupList.count());
+
             m_serverGroupList.append(serverGroup);
+        }
 
         m_serverGroupHash[serverGroupId] = serverGroup;
 
@@ -100,18 +114,29 @@ void ServerGroupModel::addServerGroup(int serverGroupId, Konversation::ServerGro
         }
 
         m_channelListHash[serverGroupId] = channels;
+
+        uint position = m_serverGroupList.indexOf(serverGroup);
+        QModelIndex firstIndex = ServerGroupModel::index(position, 0);
+        //TODO last index should be the last child in the last row
+        QModelIndex lastIndex = ServerGroupModel::index(position, (columnCount() - 1));
+
+        if (replace)
+            emit dataChanged(firstIndex, lastIndex);
+        else
+            endInsertRows();
     }
-    //TODO send a signal to views that care that the model has changed
 }
 
 void ServerGroupModel::removeServerGroup(int serverGroupId)
 {
     if (m_serverGroupHash.contains(serverGroupId))
     {
+        int position = m_serverGroupList.indexOf(m_serverGroupHash[serverGroupId]);
+
+        beginRemoveRows(QModelIndex(), position, position);
         m_serverGroupList.removeOne(m_serverGroupHash[serverGroupId]);
         m_serverGroupHash.remove(serverGroupId);
-
-        //TODO send data changed
+        endRemoveRows();
     }
 }
 

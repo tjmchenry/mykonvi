@@ -221,6 +221,8 @@ namespace Konversation
 
     void ServerListDialog::slotDelete()
     {
+        //TODO trigger datachanged / rows removed
+
         QModelIndexList selected = m_serverList->selectionModel()->selectedRows(0);
 
         QModelIndex selectedRow;

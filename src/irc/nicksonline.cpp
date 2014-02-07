@@ -243,6 +243,21 @@ bool NicksOnlineFilterModel::filterAcceptsColumn(int column, const QModelIndex& 
     return true;
 }
 
+bool NicksOnlineFilterModel::filterAcceptsRow(int row, const QModelIndex& parent) const
+{
+    if (parent.isValid())
+    {
+        QModelIndex srcParent = mapFromSource(parent);
+        if (sourceModel()->rowCount(srcParent.sibling(srcParent.row(), m_column)) > row)
+            return true;
+        else
+            return false;
+    }
+
+    return true;
+
+}
+
 void NicksOnlineFilterModel::nickOnline(int sgId, int cId, const QString& nick)
 {
     QStringList notifyList = Preferences::serverGroupById(sgId)->notifyList();

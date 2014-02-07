@@ -179,7 +179,7 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
                 // Remove all children of this servergroup from the list
                 if (serverGroupIds.contains(serverGroup->id()))
                 {
-                    while (!serverGroupIds.isEmpty() && serverGroupIds.indexOf(serverGroup->id()))
+                    while (!serverGroupIds.isEmpty() && (serverGroupIds.indexOf(serverGroup->id()) != -1))
                     {
                         int index = serverGroupIds.indexOf(serverGroup->id());
                         serverGroupIds.removeAt(index);
@@ -197,11 +197,13 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
             return false;
     }
 
+    //TODO don't allow moving the last server in a server group (theres a popup for this)
+
     pos = 0;
 
     for (i = serverGroupIds.constBegin(); i != serverGroupIds.constEnd(); ++i)
     {
-        if (parent.isValid()) // dropped on server item
+        if (parent.isValid()) // dropped on child item
         {
             QModelIndex newParent;
 
@@ -221,18 +223,24 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
             {
                 int sourceRow = rows.at(pos);
 
-                if (*i < 0) // dropped servergroup on server item, drop below server group of child item
+                if (*i < 0) // dropped servergroup on child item, drop below server group of child item
                 {
                     int newRow = row;
                     int moveRow = row;
 
                     if (newRow < 0 || newRow >= m_serverGroupList.count()) // inserting at the very end
                     {
-                        newRow = (m_serverGroupList.count() - 1);
-                        moveRow = m_serverGroupList.count();
+                        newRow = parent.row();
+
+                        // Dropped on first server group, go above it
+                        if (newRow == 0) moveRow = newRow;
+                        // Dropped on last server group, go below it
+                        else if (newRow == (m_serverGroupList.count() -1)) moveRow = parent.row() + 1;
+                        // dropped somewhere in between, go above.
+                        else moveRow = parent.row() - 1;
                     }
 
-                    if (!beginMoveRows(QModelIndex(), sourceRow, sourceRow, newParent, moveRow))
+                    if (!beginMoveRows(QModelIndex(), sourceRow, sourceRow, QModelIndex(), moveRow))
                         return false;
 
                     m_serverGroupList.move(sourceRow, newRow);
@@ -245,40 +253,48 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
 
                     Konversation::ServerGroupSettingsPtr newServerGroup = m_serverGroupList.at(newParent.row());
 
-                    int newRow = row;
-                    int moveRow = row;
-
-                    if (parent.parent().isValid())
-                    {
-                        switch (row)
-                        {
-                            case -1:
-                            case 0:
-                                newRow = parent.row();
-                                moveRow = newRow;
-                                break;
-                            case 1:
-                            default:
-                                moveRow = parent.row();
-                                newRow = moveRow + 1;
-                                break;
-                        }
-                    }
-
-                    if (newRow < 0)
-                    {
-                        moveRow = 0;
-                        newRow = 0;
-                    }
-
                     if (newServerGroup && serverGroup->id() != newServerGroup->id()) // dropped a child on another server group's child item
                     {
+                        int newRow = row;
+                        int moveRow = row;
+
+                        if (parent.parent().isValid())
+                        {
+                            switch (row)
+                            {
+                                case 0:
+                                    newRow = parent.row();
+                                    moveRow = newRow;
+                                    break;
+                                case -1:
+                                case 1:
+                                default:
+                                    if (parent.row() == 0 && rowCount(parent.parent()) > 1)
+                                    {
+                                        newRow = parent.row();
+                                        moveRow = newRow;
+                                    }
+                                    else
+                                    {
+                                        newRow = parent.row() + 1;
+                                        moveRow = newRow;
+                                    }
+                                    break;
+                            }
+                        }
+
+                        if (newRow < 0)
+                        {
+                            moveRow = 0;
+                            newRow = 0;
+                        }
+
                         if (columns.at(pos) == 0  && serverGroup->serverList().count() > sourceRow) // dropped a server on another server group's children
                         {
                             if (newRow >= newServerGroup->serverList().count()) // inserting at the end
                             {
                                 moveRow = newServerGroup->serverList().count();
-                                newRow = moveRow - 1;
+                                newRow = moveRow;
                             }
 
                             if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
@@ -294,7 +310,7 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
                             if (newRow >= newServerGroup->notifyList().count()) // inserting at the end
                             {
                                 moveRow = newServerGroup->notifyList().count();
-                                newRow = moveRow - 1;
+                                newRow = moveRow;
                             }
 
                             if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
@@ -310,6 +326,40 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
                     }
                     else if (newServerGroup && serverGroup->id() == newServerGroup->id()) // dropped a child on a child of the same server group
                     {
+                        int newRow = row;
+                        int moveRow = row;
+
+                        if (parent.parent().isValid())
+                        {
+                            switch (row)
+                            {
+                                case 0:
+                                    newRow = parent.row();
+                                    moveRow = newRow;
+                                    break;
+                                case -1:
+                                case 1:
+                                default:
+                                    if (parent.row() == 0)
+                                    {
+                                        newRow = parent.row();
+                                        moveRow = newRow;
+                                    }
+                                    else
+                                    {
+                                        newRow = parent.row();
+                                        moveRow = newRow + 1;
+                                    }
+                                    break;
+                            }
+                        }
+
+                        if (newRow < 0)
+                        {
+                            moveRow = 0;
+                            newRow = 0;
+                        }
+
                         if (columns.at(pos) == 0 && serverGroup->serverList().count() > sourceRow) // dropped a server on a child in the same server group
                         {
                             if (newRow >= serverGroup->serverList().count()) // inserting at the end
@@ -318,8 +368,8 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
                                 newRow = moveRow - 1;
                             }
 
-                            if (sourceRow < newRow) // if moving down in the same parent,the newRow will be placed -before- the moveRow
-                                moveRow = newRow + 1;
+                            if (sourceRow > newRow) // if moving up in the same parent, newrow will be placed after the moverow
+                                moveRow = newRow;
 
                             if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
                                 return false;
@@ -336,8 +386,8 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
                                 newRow = moveRow - 1;
                             }
 
-                            if (sourceRow < newRow) // if moving down in the same parent,the newRow will be placed -before- the moveRow
-                                moveRow = newRow + 1;
+                            if (sourceRow > newRow) // if moving up in the same parent, newrow will be placed after the moverow
+                                moveRow = newRow;
 
                             if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
                                 return false;
@@ -354,8 +404,8 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
                                 newRow = moveRow - 1;
                             }
 
-                            if (sourceRow < newRow) // if moving down in the same parent,the newRow will be placed -before- the moveRow
-                                moveRow = newRow + 1;
+                            if (sourceRow > newRow) // if moving up in the same parent, newrow will be placed after the moverow
+                                moveRow = newRow;
 
                             if (!beginMoveRows(sourceParent, sourceRow, sourceRow, newParent, moveRow))
                                 return false;
@@ -369,8 +419,6 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
                     }
                     else // servergroup didn't exist, or server group target id was invalid, or server item source index was invalid
                         return false;
-
-                    //TODO signal dataChanged for the affected rows (including resorted ones)
                 }
                 else // new parent row had an invalid row
                     return false;
@@ -516,12 +564,17 @@ QMimeData* ServerGroupModel::mimeData(const QModelIndexList &indexes) const
     {
         if (index.isValid())
         {
+            // needs to be put into an int first or it will just be zero
             int serverGroupId = index.internalId();
-            serverGroupIdStream << serverGroupId;
 
-            rowStream << index.row();
+            if (serverGroupId >= 0 || (serverGroupId < 0 && index.column() == 0))
+            {
+                serverGroupIdStream << serverGroupId;
 
-            columnStream << index.column();
+                rowStream << index.row();
+
+                columnStream << index.column();
+            }
         }
     }
 

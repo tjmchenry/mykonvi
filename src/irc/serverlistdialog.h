@@ -40,6 +40,8 @@ namespace Konversation
             void serverGroupsChanged(const Konversation::ServerGroupSettingsPtr serverGroup = Konversation::ServerGroupSettingsPtr());
 
         protected slots:
+            void contextMenu(const QPoint& pos);
+
             virtual void slotOk();
             void slotClose();
             void slotAdd();

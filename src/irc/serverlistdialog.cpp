@@ -21,6 +21,7 @@
 
 #include <KGuiItem>
 #include <KMessageBox>
+#include <KMenu>
 
 namespace Konversation
 {
@@ -46,6 +47,7 @@ namespace Konversation
 
         m_serverList->setFocus();
 
+        connect(m_serverList, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextMenu(QPoint)));
         connect(m_serverList, SIGNAL(activated(const QModelIndex&)), this, SLOT(slotOk()));
         connect(m_serverList->selectionModel(), SIGNAL(selectionChanged(const QItemSelection&, const QItemSelection&)), this, SLOT(updateButtons()));
         connect(m_serverList, SIGNAL(expanded(const QModelIndex&)), this, SLOT(slotSetGroupExpanded(const QModelIndex&)));
@@ -116,6 +118,21 @@ namespace Konversation
         }
 
         m_serverList->setUpdatesEnabled(true);
+    }
+
+    void ServerListDialog::contextMenu(const QPoint& pos)
+    {
+        QModelIndex index = m_serverList->indexAt(pos);
+        if (!index.isValid()) return;
+
+        KMenu* menu = new KMenu(this);
+
+        menu->addAction(i18n("&Edit..."), this, SLOT(slotEdit()));
+        menu->addAction(i18n("&Delete..."), this, SLOT(slotDelete()));
+
+        menu->exec(QCursor::pos());
+
+        delete menu;
     }
 
     void ServerListDialog::slotClose()

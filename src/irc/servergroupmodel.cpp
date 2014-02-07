@@ -80,20 +80,49 @@ void ServerGroupModel::addServerGroup(int serverGroupId, Konversation::ServerGro
 {
     if (serverGroup && serverGroupId >= 0)
     {
-        bool replace = true;
+        int replace = 0; // types of replace: 0 = no row change, 1 = insert rows, 2 = remove rows
+        int newRows = 0;
+        QModelIndex parent;
+        bool nameChanged = false;
+        bool identityChanged = false;
 
         if (m_serverGroupHash.contains(serverGroupId))
         {
             if (m_serverGroupHash[serverGroupId] != serverGroup)
             {
-                // TODO find out if there are more or fewer rows
+                parent = ServerGroupModel::index(m_serverGroupList.indexOf(m_serverGroupHash[serverGroupId]), 0);
+
+                int oldRows = qMax(m_serverGroupHash[serverGroupId]->serverList().count(), m_serverGroupHash[serverGroupId]->notifyList().count());
+                oldRows = qMax(oldRows, m_serverGroupHash[serverGroupId]->channelList().count());
+
+                int newRows = qMax(serverGroup->serverList().count(), serverGroup->notifyList().count());
+                newRows = qMax(newRows, serverGroup->channelList().count());
+
+                if (oldRows < newRows) // insert rows
+                {
+                    replace = 1;
+                    beginInsertRows(parent, oldRows, (newRows - 1));
+                }
+                else if (oldRows > newRows)
+                {
+                    replace = 2;
+                    beginRemoveRows(parent, newRows, (oldRows - 1));
+                }
+
+                if (m_serverGroupHash[serverGroupId]->name() != serverGroup->name())
+                    nameChanged = true;
+
+                if (m_serverGroupHash[serverGroupId]->identityId() != serverGroup->identityId())
+                    identityChanged = true;
             }
+            else // if they're the same we can end here
+                return;
 
             m_serverGroupList.replace(m_serverGroupList.indexOf(m_serverGroupHash[serverGroupId]), serverGroup);
         }
         else
         {
-            replace = false;
+            replace = 1;
             beginInsertRows(QModelIndex(), m_serverGroupList.count(), m_serverGroupList.count());
 
             m_serverGroupList.append(serverGroup);
@@ -113,17 +142,57 @@ void ServerGroupModel::addServerGroup(int serverGroupId, Konversation::ServerGro
             channels += (*i).name();
         }
 
+        bool channelsChanged = false;
+
+        if (parent.isValid() && m_channelListHash[serverGroupId] != channels)
+            channelsChanged = true;
+
         m_channelListHash[serverGroupId] = channels;
 
-        uint position = m_serverGroupList.indexOf(serverGroup);
-        QModelIndex firstIndex = ServerGroupModel::index(position, 0);
-        //TODO last index should be the last child in the last row
-        QModelIndex lastIndex = ServerGroupModel::index(position, (columnCount() - 1));
+        QModelIndex lastParent;
 
-        if (replace)
+        if (nameChanged)
+            lastParent = parent;
+
+        if (identityChanged)
+            lastParent = parent.sibling(parent.row(), 1);
+
+        if (channelsChanged)
+            lastParent = parent.sibling(parent.row(), 2);
+
+        QModelIndex firstIndex = ServerGroupModel::index(0, 0, parent);
+        QModelIndex lastIndex;
+
+        if (parent.isValid())
+        {
+            if (serverGroup->serverList().count() == newRows)
+                lastIndex = ServerGroupModel::index((newRows - 1), 0, parent);
+
+            if (serverGroup->notifyList().count() == newRows)
+                lastIndex = ServerGroupModel::index((newRows - 1), 1, parent);
+
+            if (serverGroup->channelList().count() == newRows)
+                lastIndex = ServerGroupModel::index((newRows - 1), 2, parent);
+        }
+
+        switch (replace)
+        {
+            case 0:
+                break;
+            case 1:
+                endInsertRows();
+                break;
+            case 2:
+                endRemoveRows();
+                break;
+        }
+
+        // These have to be separate because dataChanged can't handle ranges with different parents
+        if (lastParent.isValid())
+            emit dataChanged(parent, lastParent);
+
+        if (lastIndex.isValid())
             emit dataChanged(firstIndex, lastIndex);
-        else
-            endInsertRows();
     }
 }
 

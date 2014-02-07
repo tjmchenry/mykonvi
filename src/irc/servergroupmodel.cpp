@@ -163,16 +163,44 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
         columns << col;
     }
 
-    //Don't allow dragging and dropping of servergroups and servers in the same selection
-    if (rows.contains(-1) && rows.count(-1) != rows.count()) //TODO additional checks to allow if it's the same servergroup
-        return false;
-
     QList<int>::const_iterator i;
     int pos = 0;
+
+    // Don't allow dragging and dropping of servergroups and servers in the same selection
+    if (serverGroupIds.contains(-1) && serverGroupIds.count(-1) != serverGroupIds.count())
+    {
+        for (i = serverGroupIds.constBegin(); i != serverGroupIds.constEnd(); ++i)
+        {
+            // If this is a server group, and it has a valid index/row
+            if (*i < 0 && (rows.at(pos) > 0 && rows.at(pos) < m_serverGroupList.count()))
+            {
+                Konversation::ServerGroupSettingsPtr serverGroup = m_serverGroupList.at(rows.at(pos));
+
+                // Remove all children of this servergroup from the list
+                if (serverGroupIds.contains(serverGroup->id()))
+                {
+                    while (!serverGroupIds.isEmpty() && serverGroupIds.indexOf(serverGroup->id()))
+                    {
+                        int index = serverGroupIds.indexOf(serverGroup->id());
+                        serverGroupIds.removeAt(index);
+                        rows.removeAt(index);
+                        columns.removeAt(index);
+                    }
+                }
+            }
+
+            pos++;
+        }
+
+        // If there are still servers and servergroups in this list then this is an invalid selection, return false.
+        if (serverGroupIds.contains(-1) && serverGroupIds.count(-1) != serverGroupIds.count())
+            return false;
+    }
+
+    pos = 0;
+
     for (i = serverGroupIds.constBegin(); i != serverGroupIds.constEnd(); ++i)
     {
-        //TODO if the list contains their parent ignore it
-
         if (parent.isValid()) // dropped on server item
         {
             QModelIndex newParent;
@@ -204,8 +232,6 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
                         moveRow = m_serverGroupList.count();
                     }
 
-                    //QModelIndex sourceParent = ServerGroupModel::index(sourceRow, columns.at(pos), QModelIndex());
-                    // FIXME source parent is root index right? so QModelIndex() should work here
                     if (!beginMoveRows(QModelIndex(), sourceRow, sourceRow, newParent, moveRow))
                         return false;
 

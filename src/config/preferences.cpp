@@ -221,6 +221,21 @@ void Preferences::removeServerGroup(int id)
     self()->mServerGroupModel->removeServerGroup(id);
 }
 
+void Preferences::removeServer(int serverGroupId, int index)
+{
+    self()->mServerGroupModel->removeServer(serverGroupId, index);
+}
+
+void Preferences::removeNotify(int serverGroupId, int index)
+{
+    self()->mServerGroupModel->removeNotify(serverGroupId, index);
+}
+
+void Preferences::addNotify(int serverGroupId, QString nick)
+{
+    self()->mServerGroupModel->addNotify(serverGroupId, nick);
+}
+
 const QList<Highlight*> Preferences::highlightList()
 {
     return self()->mHighlightList;

@@ -66,6 +66,9 @@ class Preferences : public PreferencesBase
         static QList<int> serverGroupIdsByName(const QString& serverGroup);
         static bool isServerGroup(const QString& server);
         static void removeServerGroup(int id);
+        static void removeServer(int serverGroupId, int index);
+        static void removeNotify(int serverGroupId, int index);
+        static void addNotify(int serverGroupId, QString nick);
 
         /** Returns a list of alias set up by default.  This is a set of aliases for the scripts found. */
         static QStringList defaultAliasList();

@@ -30,6 +30,10 @@ class ServerGroupModel : public QAbstractListModel
         void setServerGroupList(Konversation::ServerGroupList serverGroups);
         void addServerGroup(int serverGroupId, Konversation::ServerGroupSettingsPtr serverGroup);
         void removeServerGroup(int serverGroupId);
+        void removeServer(int serverGroupId, int index);
+        void removeNotify(int serverGroupId, int index);
+        void addNotify(int serverGroupId, QString nick);
+
         Konversation::ServerGroupSettingsPtr getServerGroupById(int serverGroupId) const;
         Konversation::ServerGroupSettingsPtr getServerGroupByIndex(int serverGroupIndex) const;
         Konversation::ServerGroupHash getServerGroupHash() const;

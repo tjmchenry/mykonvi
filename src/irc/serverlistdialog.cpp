@@ -221,8 +221,6 @@ namespace Konversation
 
     void ServerListDialog::slotDelete()
     {
-        //TODO trigger datachanged / rows removed
-
         QModelIndexList selected = m_serverList->selectionModel()->selectedRows(0);
 
         QModelIndex selectedRow;
@@ -231,6 +229,7 @@ namespace Konversation
         foreach (QModelIndex index, selected)
         {
             QModelIndex srcIndex = m_serverModel->mapToSource(index);
+
             //if it has a parent that's also selected it'll be deleted anyway so no need to worry
             if (!srcIndex.parent().isValid() || !m_serverList->selectionModel()->isSelected(srcIndex.parent()))
             {
@@ -300,8 +299,7 @@ namespace Konversation
                         selectedRow = QModelIndex();
                 }
 
-                Konversation::ServerGroupSettingsPtr serverGroup = Preferences::serverGroupById(srcIndex.internalId());
-                serverGroup->removeServer(serverGroup->serverByIndex(srcIndex.row()));
+                Preferences::removeServer(srcIndex.internalId(), srcIndex.row());
             }
             else
             {

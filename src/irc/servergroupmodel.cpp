@@ -209,6 +209,46 @@ void ServerGroupModel::removeServerGroup(int serverGroupId)
     }
 }
 
+void ServerGroupModel::removeServer(int serverGroupId, int index)
+{
+    if (m_serverGroupHash.contains(serverGroupId) && m_serverGroupHash[serverGroupId]->serverList().count() > index)
+    {
+        int position = m_serverGroupList.indexOf(m_serverGroupHash[serverGroupId]);
+        QModelIndex parent = ServerGroupModel::index(position, 0);
+
+        beginRemoveRows(parent, index, index);
+        m_serverGroupHash[serverGroupId]->removeServerByIndex(index);
+        endRemoveRows();
+    }
+}
+
+void ServerGroupModel::removeNotify(int serverGroupId, int index)
+{
+    if (m_serverGroupHash.contains(serverGroupId) && m_serverGroupHash[serverGroupId]->notifyList().count() > index)
+    {
+        int position = m_serverGroupList.indexOf(m_serverGroupHash[serverGroupId]);
+        QModelIndex parent = ServerGroupModel::index(position, 0);
+
+        beginRemoveRows(parent, index, index);
+        m_serverGroupHash[serverGroupId]->removeNotifyByIndex(index);
+        endRemoveRows();
+    }
+}
+
+void ServerGroupModel::addNotify(int serverGroupId, QString nick)
+{
+    if (m_serverGroupHash.contains(serverGroupId))
+    {
+        int position = m_serverGroupList.indexOf(m_serverGroupHash[serverGroupId]);
+        int newIndex = m_serverGroupHash[serverGroupId]->notifyList().count();
+        QModelIndex parent = ServerGroupModel::index(position, 0);
+
+        beginInsertRows(parent, newIndex, newIndex);
+        m_serverGroupHash[serverGroupId]->addNotify(nick);
+        endInsertRows();
+    }
+}
+
 int ServerGroupModel::getServerGroupIndexById(int id) const
 {
     if (m_serverGroupHash.contains(id))
@@ -948,13 +988,11 @@ bool ServerGroupFilterModel::filterAcceptsRow(int row, const QModelIndex& parent
 {
     if (parent.isValid())
     {
-        QModelIndex srcParent = mapFromSource(parent);
-        if (sourceModel()->rowCount(srcParent.sibling(srcParent.row(), m_column)) > row)
+        if (sourceModel()->rowCount(parent.sibling(parent.row(), m_column)) > row)
             return true;
         else
             return false;
     }
 
     return true;
-
 }

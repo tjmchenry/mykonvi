@@ -235,7 +235,7 @@ void ServerGroupModel::removeNotify(int serverGroupId, int index)
     }
 }
 
-void ServerGroupModel::addNotify(int serverGroupId, QString nick)
+bool ServerGroupModel::addNotify(int serverGroupId, const QString& nick)
 {
     if (m_serverGroupHash.contains(serverGroupId))
     {
@@ -246,7 +246,11 @@ void ServerGroupModel::addNotify(int serverGroupId, QString nick)
         beginInsertRows(parent, newIndex, newIndex);
         m_serverGroupHash[serverGroupId]->addNotify(nick);
         endInsertRows();
+
+        return true;
     }
+
+    return false;
 }
 
 int ServerGroupModel::getServerGroupIndexById(int id) const

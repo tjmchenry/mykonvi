@@ -637,11 +637,17 @@ void NicksOnline::addNickname()
 
 void NicksOnline::slotAddNickname(int sgId, const QString& nick)
 {
-    //TODO select the new one afterwards.
-    Preferences::addNotify(sgId, nick);
+    if (Preferences::addNotify(sgId, nick))
+    {
+        int parentRow = Preferences::serverGroupList().indexOf(Preferences::serverGroupById(sgId));
+        int childRow = Preferences::serverGroupById(sgId)->notifyList().indexOf(nick);
+        QModelIndex parent = m_nicksOnlineModel->index(parentRow, 0);
+        QModelIndex selectedRow = m_nicksOnlineModel->index(childRow, 0, parent);
 
-    //TODO is it nescessary/appropriate to save here, if so where else.
-    static_cast<Application*>(kapp)->saveOptions(true);
+        m_nicksOnlineView->selectionModel()->select(selectedRow, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
+        static_cast<Application*>(kapp)->saveOptions(true);
+    }
 }
 
 void NicksOnline::removeNickname()
@@ -653,8 +659,28 @@ void NicksOnline::removeNickname()
 
     int sgId = index.data(ServerGroupIdRole).toInt();
 
-    //TODO select the right one
+    int selectedRow = -1;
+    int notifyCount = Preferences::serverGroupById(sgId)->notifyList().count();
+
+    if (index.row() == 0 && notifyCount > 1)
+        selectedRow = 0;
+    else if (index.row() > 0 && index.row() < (notifyCount - 1))
+        selectedRow = index.row();
+    else if (index.row() > 0 && index.row() >= (notifyCount - 1))
+        selectedRow = index.row() - 1;
+
+    QModelIndex select;
+
+    if (selectedRow < 0)
+        select = index.parent();
+    else
+        select = m_nicksOnlineModel->index(selectedRow, 0, index.parent());
+
     Preferences::removeNotify(sgId, index.row());
+
+    m_nicksOnlineView->selectionModel()->select(select, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
+    static_cast<Application*>(kapp)->saveOptions(true);
 }
 
 void NicksOnline::createContact()

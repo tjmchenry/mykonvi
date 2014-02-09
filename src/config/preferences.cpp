@@ -231,9 +231,9 @@ void Preferences::removeNotify(int serverGroupId, int index)
     self()->mServerGroupModel->removeNotify(serverGroupId, index);
 }
 
-void Preferences::addNotify(int serverGroupId, QString nick)
+bool Preferences::addNotify(int serverGroupId, const QString& nick)
 {
-    self()->mServerGroupModel->addNotify(serverGroupId, nick);
+    return self()->mServerGroupModel->addNotify(serverGroupId, nick);
 }
 
 const QList<Highlight*> Preferences::highlightList()

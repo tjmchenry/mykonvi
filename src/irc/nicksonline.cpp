@@ -54,15 +54,17 @@ NicksOnlineFilterModel::~NicksOnlineFilterModel()
 
 QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
 {
-    if (!index.isValid() || index.row() >= rowCount(index.parent()))
+    if (!index.isValid() || index.row() >= rowCount(index.parent()) || index.column() >= columnCount(index.parent()))
         return QVariant();
+
+    QModelIndex srcIndex = mapToSource(index);
 
     if (!index.parent().isValid()) //top level item
     {
-        if (role == Qt::DisplayRole && mapToSource(index).internalId() < 0)
+        if (role == Qt::DisplayRole && srcIndex.internalId() < 0)
         {
             ServerGroupModel* source = static_cast<ServerGroupModel*>(sourceModel());
-            Konversation::ServerGroupSettingsPtr serverGroup = source->getServerGroupByIndex(mapToSource(index).row());
+            Konversation::ServerGroupSettingsPtr serverGroup = source->getServerGroupByIndex(srcIndex.row());
             int sgId = serverGroup->id();
 
             QStringList serverNames = QStringList();
@@ -84,7 +86,7 @@ QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
             switch (index.column())
             {
                 case 0:
-                    return mapToSource(index).data(role).toString();
+                    return srcIndex.data(role).toString();
                 case 1:
                     if (!serverNames.isEmpty())
                         return serverNames.join(", ");
@@ -107,11 +109,11 @@ QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
             return QSize(30, m_minimumRowHeight);
         }
 
-        if (mapToSource(index).parent().isValid())
+        if (srcIndex.parent().isValid())
         {
-            QString nickString = mapToSource(index).data(role).toString();
+            QString nickString = srcIndex.sibling(srcIndex.row(), 1).data(role).toString();
 
-            int sgId = mapToSource(index).internalId();
+            int sgId = srcIndex.internalId();
             QHash<int, QString> serverNames = QHash<int, QString>();
 
             if (m_connectionManager->getConnectedServerGroups().count(sgId) > 0)
@@ -168,7 +170,7 @@ QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
                             return QVariant();
                     }
                 }
-                else if (role == Qt::DecorationRole)
+                else if (role == Qt::DecorationRole && index.column() == 0)
                 {
                     return m_offlineIcon;
                 }
@@ -221,9 +223,20 @@ bool NicksOnlineFilterModel::lessThan(const QModelIndex& left, const QModelIndex
     return QSortFilterProxyModel::lessThan(left, right);
 }
 
+int NicksOnlineFilterModel::columnCount(const QModelIndex& parent) const
+{
+    //TODO change to just return 2 always if the column count for both stays the same.
+    if (parent.isValid())
+        return 2;
+
+    return 2;
+}
+
 bool NicksOnlineFilterModel::filterAcceptsColumn(int column, const QModelIndex& parent) const
 {
-    if (parent.isValid() && column != m_column)
+    Q_UNUSED(parent);
+
+    if (column > 1)
         return false;
 
     return true;
@@ -624,6 +637,7 @@ void NicksOnline::addNickname()
 
 void NicksOnline::slotAddNickname(int sgId, const QString& nick)
 {
+    //TODO select the new one afterwards.
     Preferences::addNotify(sgId, nick);
 
     //TODO is it nescessary/appropriate to save here, if so where else.
@@ -639,6 +653,7 @@ void NicksOnline::removeNickname()
 
     int sgId = index.data(ServerGroupIdRole).toInt();
 
+    //TODO select the right one
     Preferences::removeNotify(sgId, index.row());
 }
 

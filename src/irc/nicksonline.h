@@ -62,6 +62,7 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
         bool lessThan(const QModelIndex& left, const QModelIndex& right) const;
         bool filterAcceptsColumn(int column, const QModelIndex& parent) const;
         bool filterAcceptsRow(int row, const QModelIndex& parent) const;
+        int columnCount(const QModelIndex& parent = QModelIndex()) const;
 
         void removeNotifyNick(int sgId, int cId, const QString& nick);
         void addNotifyNick(int sgId, int cId, const QString& nick);

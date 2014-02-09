@@ -291,7 +291,19 @@ bool ServerGroupModel::dropMimeData(const QMimeData* data, Qt::DropAction action
             return false;
     }
 
-    //TODO don't allow moving the last server in a server group (theres a popup for this)
+    // don't allow moving the last server in a server group
+    if (!serverGroupIds.contains(-1)) // If there aren't server groups, then we're moving servers
+    {
+        pos = 0;
+
+        for (i = serverGroupIds.constBegin(); i != serverGroupIds.constEnd(); ++i)
+        {
+            if (columns.at(pos) == 0 && m_serverGroupHash.contains(*i) && m_serverGroupHash[*i]->serverList().count() <= serverGroupIds.count(*i))
+                return false;
+
+            pos++;
+        }
+    }
 
     pos = 0;
 

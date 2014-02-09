@@ -624,32 +624,22 @@ void NicksOnline::addNickname()
 
 void NicksOnline::slotAddNickname(int sgId, const QString& nick)
 {
-    //TODO this does not update the model, idea: add notify through servergroupmodel
-    Konversation::ServerGroupSettingsPtr serverGroup = Preferences::serverGroupById(sgId);
-    if (serverGroup)
-    {
-        serverGroup->addNotify(nick);
-        //TODO is it nescessary/appropriate to save here, if so where else.
-        static_cast<Application*>(kapp)->saveOptions(true);
-    }
+    Preferences::addNotify(sgId, nick);
+
+    //TODO is it nescessary/appropriate to save here, if so where else.
+    static_cast<Application*>(kapp)->saveOptions(true);
 }
 
 void NicksOnline::removeNickname()
 {
-    //TODO this does not update the model, idea: add notify through servergroupmodel
     QModelIndex index = m_nicksOnlineView->selectionModel()->currentIndex();
 
     if (!index.isValid() || !index.parent().isValid())
         return;
 
-    QString nick = index.data(NickRole).toString();
     int sgId = index.data(ServerGroupIdRole).toInt();
 
-    Konversation::ServerGroupSettingsPtr serverGroup = Preferences::serverGroupById(sgId);
-
-    serverGroup->removeNotify(nick);
-
-    //TODO make sure there's a signal so the model knows it has changed
+    Preferences::removeNotify(sgId, index.row());
 }
 
 void NicksOnline::createContact()

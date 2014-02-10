@@ -289,8 +289,6 @@ void Server::doPreShellCommand()
 
 void Server::initTimers()
 {
-    m_notifyTimer.setObjectName("notify_timer");
-    m_notifyTimer.setSingleShot(true);
     m_incomingTimer.setObjectName("incoming_timer");
     m_pingSendTimer.setSingleShot(true);
 }
@@ -299,7 +297,6 @@ void Server::connectSignals()
 {
     // Timers
     connect(&m_incomingTimer, SIGNAL(timeout()), this, SLOT(processIncomingData()));
-    connect(&m_notifyTimer, SIGNAL(timeout()), this, SLOT(notifyTimeout()));
     connect(&m_pingResponseTimer, SIGNAL(timeout()), this, SLOT(updateLongPongLag()));
     connect(&m_pingSendTimer, SIGNAL(timeout()), this, SLOT(sendPing()));
 
@@ -390,9 +387,6 @@ void Server::connectSignals()
 
     // Stats
     connect(this, SIGNAL(sentStat(int,int)), SLOT(collectStats(int,int)));
-
-    //connect(Preferences::self(), SIGNAL(notifyListStarted(int)),
-    //    this, SLOT(notifyListStarted(int)), Qt::QueuedConnection);
 }
 
 int Server::getPort()
@@ -776,7 +770,6 @@ void Server::broken(KTcpSocket::Error error)
 
     resetQueues();
 
-    m_notifyTimer.stop();
     m_pingSendTimer.stop();
     m_pingResponseTimer.stop();
     m_inputFilter.setLagMeasuring(false);
@@ -921,11 +914,6 @@ void Server::connectionEstablished(const QString& ownHost)
         QHostInfo::lookupHost(ownHost, this, SLOT(gotOwnResolvedHostByWelcome(QHostInfo)));
 
     updateConnectionState(Konversation::SSConnected);
-
-    // Make a helper object to build ISON (notify) list and map offline nicks to addressbook.
-    // TODO: Give the object a kick to get it started?
-    delete m_serverISON;
-    m_serverISON = new ServerISON(this);
 
     // Register with services
     if (getIdentity() && getIdentity()->getAuthType() == "nickserv")
@@ -2897,41 +2885,14 @@ ChannelNickPtr Server::addNickToUnjoinedChannelsList(const QString& channelName,
  * @param nickname           The nickname that is online.
  * @return                   Pointer to NickInfo for nick.
  */
-NickInfoPtr Server::setWatchedNickOnline(const QString& nickname)
+void Server::announceWatchedNickOnline(const QString& nickname)
 {
-    NickInfoPtr nickInfo = getNickInfo(nickname);
-    if (!nickInfo)
-    {
-        QString lcNickname(nickname.toLower());
-        nickInfo = new NickInfo(nickname, this);
-        m_allNicks.insert(lcNickname, nickInfo);
-    }
-
-    emit watchedNickChanged(this, nickname, true);
-    KABC::Addressee addressee = nickInfo->getAddressee();
-    if (!addressee.isEmpty()) Konversation::Addressbook::self()->emitContactPresenceChanged(addressee.uid());
-
     appendMessageToFrontmost(i18nc("Message type", "Notify"), i18n("%1 is online (%2).", nickname, getServerName()), getStatusView());
-
-    static_cast<Application*>(kapp)->notificationHandler()->nickOnline(getStatusView(), nickname);
-
-    nickInfo->setPrintedOnline(true);
-    return nickInfo;
 }
 
-void Server::setWatchedNickOffline(const QString& nickname, const NickInfoPtr nickInfo)
+void Server::announceWatchedNickOffline(const QString& nickname)
 {
-   if (nickInfo) {
-        KABC::Addressee addressee = nickInfo->getAddressee();
-        if (!addressee.isEmpty()) Konversation::Addressbook::self()->emitContactPresenceChanged(addressee.uid(), 1);
-    }
-
-    emit watchedNickChanged(this, nickname, false);
-
     appendMessageToFrontmost(i18nc("Message type", "Notify"), i18n("%1 went offline (%2).", nickname, getServerName()), getStatusView());
-
-    static_cast<Application*>(kapp)->notificationHandler()->nickOffline(getStatusView(), nickname);
-
 }
 
 bool Server::setNickOffline(const QString& nickname)
@@ -2957,8 +2918,6 @@ bool Server::setNickOffline(const QString& nickname)
 
         // Delete NickInfo.
         if (m_allNicks.contains(lcNickname)) m_allNicks.remove(lcNickname);
-        // If the nick was in the watch list, emit various signals and messages.
-        if (isWatchedNick(nickname)) setWatchedNickOffline(nickname, nickInfo);
 
         nickInfo->setPrintedOnline(false);
     }
@@ -3291,9 +3250,6 @@ void Server::renameNick(const QString &nickname, const QString &newNick)
             // All we do is notify that the nick has been renamed.. we haven't actually renamed it yet
             if (channel->getNickByName(nickname)) channel->nickRenamed(nickname, *nickInfo);
         }
-
-        //Watched nicknames stuff
-        if (isWatchedNick(nickname)) setWatchedNickOffline(nickname, NickInfoPtr());
     }
 
     // We had an encrypt conversation with the user that changed his nick, lets copy the key to the new nick and remove the old nick

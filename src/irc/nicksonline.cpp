@@ -380,16 +380,21 @@ void NicksOnlineFilterModel::nickOnline(int sgId, int cId, const QString& nick)
 
         if (notifyList.contains(nick))
         {
-            if (isNickWatched(sgId, cId, nick))
+            if (isWatchedNickOnline(sgId, cId, nick)) // Nick is watched and online
+            {
+                if (m_nickListModel->isNickOnline(cId, nick)) // Nick was online, but we now share a channel
+                {
+                    // If a nick object exists, then we can remove it from our watch list, because we share a channel with them.
+                    removeNotifyNick(sgId, cId, nick);
+                }
+            }
+            else if(isNickWatched(sgId, cId, nick)) // Nick is watched and previously offline
             {
                 setWatchedNickOnline(sgId, cId, nick, true);
+                m_connectionManager->getServerByConnectionId(cId)->announceWatchedNickOnline(nick);
             }
-
-            if (m_nickListModel->isNickOnline(cId, nick))
-            {
-                // If a nick object exists, then we can remove it from our watch list, because we share a channel with them.
-                removeNotifyNick(sgId, cId, nick);
-            }
+            else if (m_nickListModel->isNickOnline(cId, nick)) // Nick is not watched, and is now online
+                m_connectionManager->getServerByConnectionId(cId)->announceWatchedNickOnline(nick);
 
             QModelIndex parent = NicksOnlineFilterModel::index(Preferences::serverGroupList().indexOf(Preferences::serverGroupById(sgId)), m_column, QModelIndex());
             QModelIndex firstIndex = NicksOnlineFilterModel::index(notifyList.indexOf(nick), 0, parent);
@@ -419,6 +424,8 @@ void NicksOnlineFilterModel::nickOffline(int sgId, int cId, const QString& nick)
                 QModelIndex lastIndex = firstIndex.sibling(firstIndex.row(), 1);
                 //TODO when we can dep Qt 5 we can specify what roles have changed.
                 emit dataChanged(firstIndex, lastIndex); //, QVector<int>() << Qt::DisplayRole);
+
+                m_connectionManager->getServerByConnectionId(cId)->announceWatchedNickOffline(nick);
             }
         }
         else

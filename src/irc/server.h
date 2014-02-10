@@ -521,6 +521,9 @@ class Server : public QObject
         void parseFinishKeyX(const QString &sender, const QString &pubKey);
         #endif
 
+        void announceWatchedNickOnline(const QString& nickname);
+        void announceWatchedNickOffline(const QString& nickname);
+
         /// Start the NickInfo changed timer if it isn't started already
         void startNickInfoChangedTimer();
         /// Start the ChannelNick changed timer if it isn't started already
@@ -637,24 +640,6 @@ class Server : public QObject
          *  @return            The NickInfo for the nickname.
          */
         ChannelNickPtr addNickToUnjoinedChannelsList(const QString& channelName, const QString& nickname);
-
-        /**
-         * If not already online, changes a nick to the online state by creating
-         * a NickInfo for it and emits various signals and messages for it.
-         * This method should only be called for nicks on the watch list.
-         * @param nickname           The nickname that is online.
-         * @return                   Pointer to NickInfo for nick.
-         */
-        NickInfoPtr setWatchedNickOnline(const QString& nickname);
-
-        /**
-        * Display offline notification for a certain nickname. The function doesn't change NickInfo objects.
-        * If NickInfoPtr is given, then also the integration with KAddressBook is engaged (i.e. the
-        * nick is marked as away)
-        * @param nickname           The nickname that is offline
-        * @param nickInfo           Pointer to NickInfo for nick
-        */
-        void setWatchedNickOffline(const QString& nickname, const NickInfoPtr nickInfo);
 
         /**
          * If nickname is no longer on any channel list, or the query list, delete it altogether.

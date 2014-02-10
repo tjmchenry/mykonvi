@@ -246,14 +246,13 @@ bool NicksOnlineFilterModel::filterAcceptsRow(int row, const QModelIndex& parent
 {
     if (parent.isValid())
     {
-        if (sourceModel()->rowCount(parent.sibling(parent.row(), m_column)) > row)
+        if (parent.row() < Preferences::serverGroupList().count() && Preferences::serverGroupByIndex(parent.row())->notifyList().count() > row)
             return true;
         else
             return false;
     }
 
     return true;
-
 }
 
 void NicksOnlineFilterModel::nickOnline(int sgId, int cId, const QString& nick)

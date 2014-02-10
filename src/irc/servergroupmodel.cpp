@@ -10,6 +10,7 @@
 */
 
 #include "servergroupmodel.h"
+#include <preferences.h>
 
 #include <QMimeData>
 
@@ -737,19 +738,11 @@ QMimeData* ServerGroupModel::mimeData(const QModelIndexList &indexes) const
 
 int ServerGroupModel::rowCount(const QModelIndex& parent) const
 {
-    if (parent.isValid() && !parent.parent().isValid() && m_serverGroupList.count() > parent.row())
+    if (parent.isValid() && !parent.parent().isValid() && m_serverGroupList.count() > parent.row() && parent.column() < columnCount(parent))
     {
-        switch (parent.column())
-        {
-            case 0:
-                return m_serverGroupList[parent.row()]->serverList().count();
-            case 1:
-                return m_serverGroupList[parent.row()]->notifyList().count();
-            case 2:
-                return m_serverGroupList[parent.row()]->channelList().count();
-            default:
-                return 0;
-        }
+        int max = qMax(m_serverGroupList.at(parent.row())->serverList().count(), m_serverGroupList.at(parent.row())->notifyList().count());
+
+        return qMax(max, m_serverGroupList.at(parent.row())->channelList().count());
     }
 
     if (!parent.isValid())
@@ -992,7 +985,7 @@ bool ServerGroupFilterModel::filterAcceptsRow(int row, const QModelIndex& parent
 {
     if (parent.isValid())
     {
-        if (sourceModel()->rowCount(parent.sibling(parent.row(), m_column)) > row)
+        if (parent.row() < Preferences::serverGroupList().count() && Preferences::serverGroupByIndex(parent.row())->serverList().count() > row)
             return true;
         else
             return false;

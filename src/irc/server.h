@@ -50,7 +50,6 @@ class Query;
 class Identity;
 class RawLog;
 class ChannelListPanel;
-class ServerISON;
 class ChatWindow;
 class ViewContainer;
 
@@ -314,13 +313,6 @@ class Server : public QObject
          *                     or 99 if not known.  See channelnick.cpp for bit definitions.
          */
         ChannelNickPtr setChannelNick(const QString& channelName, const QString& nickname, unsigned int mode = 99);
-        /**
-         * Given the nickname of nick that is offline (or at least not known to be online),
-         * returns the addressbook entry (if any) for the nick.
-         * @param nickname       Desired nickname.  Case insensitive.
-         * @return               Addressbook entry of the nick or empty if not found.
-         */
-        KABC::Addressee getOfflineNickAddressee(QString& nickname);
 
         /**
          * Returns a QList of all channels
@@ -597,9 +589,6 @@ class Server : public QObject
         /// Update the encoding shown in the mainwindow's actions
         void updateEncoding();
 
-        /// Update the NickInfos from the address book
-        void updateNickInfoAddressees();
-
         /** Called when the NickInfo changed timer times out.
           * Emits the nickInfoChanged() signal for all changed NickInfos
           */
@@ -771,9 +760,6 @@ class Server : public QObject
         /// Creates a list of known users and returns the one chosen by the user
         inline QString recipientNick() const;
 
-        /// Helper object to construct ISON (notify) list and map offline nicks to
-        /// addressbook.
-        ServerISON* m_serverISON;
         /// All nicks known to this server.  Note this is NOT a list of all nicks on the server.
         /// Any nick appearing in this list is online, but may not necessarily appear in
         /// any of the joined or unjoined channel lists because a WHOIS has not yet been

@@ -33,9 +33,7 @@
 #include "viewcontainer.h"
 #include "rawlog.h"
 #include "channellistpanel.h"
-#include "addressbook.h"
 #include "scriptlauncher.h"
-#include "serverison.h"
 #include "notificationhandler.h"
 #include "awaymanager.h"
 #include "ircinput.h"
@@ -98,7 +96,6 @@ Server::Server(QObject* parent, ConnectionSettings& settings) : QObject(parent)
     m_currentLag = -1;
     m_rawLog = 0;
     m_channelListPanel = 0;
-    m_serverISON = 0;
     m_away = false;
     m_socket = 0;
     m_prevISONList = QStringList();
@@ -145,9 +142,6 @@ Server::Server(QObject* parent, ConnectionSettings& settings) : QObject(parent)
     // TODO FIXME this disappeared in a merge, ensure it should have
     updateConnectionState(Konversation::SSNeverConnected);
 
-    connect(Konversation::Addressbook::self()->getAddressBook(), SIGNAL(addressBookChanged(AddressBook*)), this, SLOT(updateNickInfoAddressees()));
-    connect(Konversation::Addressbook::self(), SIGNAL(addresseesChanged()), this, SLOT(updateNickInfoAddressees()));
-
     m_nickInfoChangedTimer = new QTimer(this);
     m_nickInfoChangedTimer->setSingleShot(true);
     m_nickInfoChangedTimer->setInterval(3000);
@@ -164,10 +158,6 @@ Server::~Server()
     m_nickListModel2->removeServer(connectionId());
     //send queued messages
     kDebug() << "Server::~Server(" << getServerName() << ")";
-
-    // Delete helper object.
-    delete m_serverISON;
-    m_serverISON = 0;
 
     // clear nicks online
     emit nicksNowOnline(this,QStringList(),true);
@@ -241,9 +231,6 @@ void Server::purgeData()
     m_unjoinedChannels.clear();
 
     m_queryNicks.clear();
-    delete m_serverISON;
-    m_serverISON = 0;
-
 }
 
 //... so called to match the ChatWindow derivatives.
@@ -3867,14 +3854,6 @@ void Server::startAwayTimer()
     m_awayTime = QDateTime::currentDateTime().toTime_t();
 }
 
-KABC::Addressee Server::getOfflineNickAddressee(QString& nickname)
-{
-    if (m_serverISON)
-        return m_serverISON->getOfflineNickAddressee(nickname);
-    else
-        return KABC::Addressee();
-}
-
 void Server::enableIdentifyMsg(bool enabled)
 {
     m_identifyMsg = enabled;
@@ -4063,14 +4042,6 @@ QAbstractItemModel* Server::nickListModel() const
 NickListModel* Server::nickListModel2() const
 {
     return m_nickListModel2;
-}
-
-void Server::updateNickInfoAddressees()
-{
-    foreach(NickInfoPtr nickInfo, m_allNicks)
-    {
-        nickInfo->refreshAddressee();
-    }
 }
 
 void Server::startNickInfoChangedTimer()

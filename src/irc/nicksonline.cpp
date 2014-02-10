@@ -651,9 +651,12 @@ void NicksOnline::addNickname()
     int sgId = -1;
     QModelIndex index = m_nicksOnlineView->selectionModel()->currentIndex();
 
-    if (index.isValid() && index.parent().isValid())
+    if (index.isValid())
     {
-        sgId = index.data(ServerGroupIdRole).toInt();
+        if(index.parent().isValid())
+            sgId = index.data(ServerGroupIdRole).toInt();
+        else if (Preferences::serverGroupList().count() > index.row())
+            sgId = Preferences::serverGroupByIndex(index.row())->id();
     }
 
     EditNotifyDialog* end = new EditNotifyDialog(this, sgId);

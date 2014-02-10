@@ -56,13 +56,16 @@ const QString& nickname):
 
     // Add network names to network combobox and select the one corresponding to argument.
     m_networkNameCombo->addItem(i18n("All Networks"), -1);
-    QList<Server *> serverList = Application::instance()->getConnectionManager()->getServerList();
-    for (int i = 0; i < serverList.count(); ++i)
+
+    Konversation::ServerGroupList serverGroupList = Preferences::serverGroupList();
+
+    Konversation::ServerGroupList::const_iterator i;
+
+    for (i = serverGroupList.constBegin(); i != serverGroupList.constEnd(); ++i)
     {
-      Server *server = serverList.at(i);
-      if (server->getServerGroup())
-        m_networkNameCombo->addItem(server->getServerGroup()->name(), server->getServerGroup()->id());
+        m_networkNameCombo->addItem((*i)->name(), (*i)->id());
     }
+
     m_networkNameCombo->setCurrentIndex(m_networkNameCombo->findData(serverGroupId, Qt::UserRole));
     layout->addWidget(networkNameLabel, 0, 0);
     layout->addWidget(m_networkNameCombo, 0, 1);

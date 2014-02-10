@@ -628,7 +628,7 @@ QString Nick2::getBestPersonName() const
 //TODO get alternative names from kpeople to use
     if(!getRealName().isEmpty())
     {
-        return getRealName();
+        return QString(getRealName() + " (" + getNickname() + ")");
     }
     else
     {

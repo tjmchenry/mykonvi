@@ -116,7 +116,7 @@ void NickListModel::insertNick(int connectionId, Nick2* item)
         {
             //TODO this will need to be different for meta contacts..
             int sgId = m_connectionManager->getServerByConnectionId(connectionId)->getServerGroup()->id();
-            emit nickOffline(sgId, connectionId, item->getNickname());
+            emit nickOnline(sgId, connectionId, item->getNickname());
         }
     }
 }
@@ -192,6 +192,12 @@ void NickListModel::removeAllNicksFromChannel(int connectionId, const QString& c
             uint position = m_nickLists[connectionId].indexOf(i.value());
             if (!i.value()->isInAnyChannel())
             {
+                if (isNotifyNick(connectionId, i.key()))
+                {
+                    int sgId = m_connectionManager->getServerByConnectionId(connectionId)->getServerGroup()->id();
+                    emit nickOffline(sgId, connectionId, i.key());
+                }
+
                 beginRemoveRows(m_servers[connectionId], position, position);
                 i = m_nickHashes[connectionId].erase(i);
                 m_nickLists[connectionId].removeAt(position);

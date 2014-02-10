@@ -1556,6 +1556,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(5), bAway);
                     m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), parameterList.value(5), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
                     m_server->nickListModel2()->setNickRealName(m_server->connectionId(), parameterList.value(5), trailing.section(' ', 1));
+                    m_server->nickListModel2()->setNickNetServer(m_server->connectionId(), parameterList.value(5), parameterList.value(4));
 
                     if (nickInfo)
                     {

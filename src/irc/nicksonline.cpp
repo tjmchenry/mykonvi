@@ -272,7 +272,8 @@ bool NicksOnlineFilterModel::filterAcceptsRow(int row, const QModelIndex& parent
 {
     if (parent.isValid())
     {
-        if (parent.row() < Preferences::serverGroupList().count() && Preferences::serverGroupByIndex(parent.row())->notifyList().count() > row)
+        if (parent.row() < Preferences::serverGroupList().count() && Preferences::serverGroupByIndex(parent.row())->notifyList().count() > row &&
+            sourceModel()->index(row, m_column, parent).data(Qt::DisplayRole).toString().contains(filterRegExp()))
             return true;
         else
             return false;

@@ -27,7 +27,7 @@
 #include "ui_nicksonlinepanelui.h"
 
             //nick, patterns
-typedef QHash<QString, QStringList> WatchedNicks;
+typedef QHash<QString, bool> WatchedNicks;
             //monitor type, watched nick
 typedef QHash<int, WatchedNicks> WatchedNickList;
             //connection id, watched nick list
@@ -55,6 +55,7 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
         void removeNotifyNick(int sgId, const QString& nick);
         void updateNotifyConnection(int sgId, int cId);
 
+        void notifyResponse(int cId, const QString& newIson);
         void nickOnline(int sgId, int cId, const QString& nick);
         void nickOffline(int sgId, int cId, const QString& nick);
 
@@ -65,9 +66,11 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
         int columnCount(const QModelIndex& parent = QModelIndex()) const;
 
         void removeNotifyNick(int sgId, int cId, const QString& nick);
-        void addNotifyNick(int sgId, int cId, const QString& nick);
+        void addNotifyNick(int sgId, int cId, const QString& nick, bool online = false);
         bool isWatchTypeEmpty(int type) const;
         bool isNickWatched(int sgId, int cId, const QString& nick) const;
+        bool isWatchedNickOnline(int sgId, int cId, const QString& nick) const;
+        void setWatchedNickOnline(int sgId, int cId, const QString& nick, bool online);
 
     protected slots:
         void isonCheck();
@@ -76,6 +79,8 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
         void updateMinimumRowHeight();
 
         int m_minimumRowHeight;
+
+        QHash<int, QStringList> m_isonList;
 
         QIcon m_onlineIcon;
         QIcon m_offlineIcon;

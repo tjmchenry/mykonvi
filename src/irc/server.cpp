@@ -354,7 +354,6 @@ void Server::connectSignals()
             this, SLOT(startReverseDccChat(QString,QStringList)));
     connect(&m_inputFilter, SIGNAL(welcome(QString)), this, SLOT(capCheckIgnored()));
     connect(&m_inputFilter, SIGNAL(welcome(QString)), this, SLOT(connectionEstablished(QString)));
-    connect(&m_inputFilter, SIGNAL(notifyResponse(QString)), this, SLOT(notifyResponse(QString)));
     connect(&m_inputFilter, SIGNAL(startReverseDccSendTransfer(QString,QStringList)),
         this, SLOT(startReverseDccSendTransfer(QString,QStringList)));
     connect(&m_inputFilter, SIGNAL(addDccGet(QString,QStringList)),
@@ -928,9 +927,6 @@ void Server::connectionEstablished(const QString& ownHost)
     delete m_serverISON;
     m_serverISON = new ServerISON(this);
 
-    // get first notify very early
-    startNotifyTimer(1000);
-
     // Register with services
     if (getIdentity() && getIdentity()->getAuthType() == "nickserv")
         registerWithServices();
@@ -1061,77 +1057,6 @@ void Server::notifyAction(const QString& nick)
         Konversation::OutputFilterResult result = getOutputFilter()->parse(getNickname(),outList[index],QString());
         queue(result.toServer);
     }                                             // endfor
-}
-
-void Server::notifyResponse(const QString& nicksOnline)
-{
-    bool nicksOnlineChanged = false;
-    QStringList actualList = nicksOnline.split(' ', QString::SkipEmptyParts);
-    QString lcActual = ' ' + nicksOnline + ' ';
-    QString lcPrevISON = ' ' + (m_prevISONList.join(" ")) + ' ';
-
-    QStringList::iterator it;
-
-    //Are any nicks gone offline
-    for (it = m_prevISONList.begin(); it != m_prevISONList.end(); ++it)
-    {
-        if (!lcActual.contains(' ' + (*it) + ' ', Qt::CaseInsensitive))
-        {
-            setNickOffline(*it);
-            nicksOnlineChanged = true;
-        }
-    }
-
-    //Are any nicks gone online
-    for (it = actualList.begin(); it != actualList.end(); ++it)
-    {
-        if (!lcPrevISON.contains(' ' + (*it) + ' ', Qt::CaseInsensitive)) {
-            setWatchedNickOnline(*it);
-            nicksOnlineChanged = true;
-        }
-    }
-
-    // Note: The list emitted in this signal *does* include nicks in joined channels.
-    emit nicksNowOnline(this, actualList, nicksOnlineChanged);
-
-    m_prevISONList = actualList;
-
-    // Next round
-    startNotifyTimer();
-}
-
-void Server::notifyListStarted(int serverGroupId)
-{
-    if (getServerGroup())
-        if (getServerGroup()->id() == serverGroupId)
-            startNotifyTimer(1000);
-}
-
-void Server::startNotifyTimer(int msec)
-{
-    // make sure the timer gets started properly in case we have reconnected
-    m_notifyTimer.stop();
-
-    if (Preferences::self()->useNotify())
-    {
-        if (msec == 0)
-            msec = Preferences::self()->notifyDelay() * 1000;
-
-        m_notifyTimer.start(msec);
-    }
-}
-
-void Server::notifyTimeout()
-{
-    // Notify delay time is over, send ISON request if desired
-    if (Preferences::self()->useNotify())
-    {
-        // But only if there actually are nicks in the notify list
-        QString list = getISONListString();
-
-        if (!list.isEmpty())
-            queue("ISON " + list, LowPriority);
-    }
 }
 
 void Server::autoCommandsAndChannels()

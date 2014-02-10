@@ -488,9 +488,6 @@ class Server : public QObject
 
         void addDccSend(const QString &recipient, KUrl fileURL, bool passive = Preferences::self()->dccPassiveSend(), const QString &altFileName = QString(), quint64 fileSize = 0);
         void removeQuery(Query *query);
-        void notifyListStarted(int serverGroupId);
-        void startNotifyTimer(int msec=0);
-        void notifyTimeout();
         void sendJoinCommand(const QString& channelName, const QString& password = QString());
         void requestAway(const QString& reason = "");
         void requestUnaway();
@@ -560,7 +557,6 @@ class Server : public QObject
          */
         void sslError(const QList<KSslError>&);
         void connectionEstablished(const QString& ownHost);
-        void notifyResponse(const QString& nicksOnline);
 
         void slotNewDccTransferItemQueued(Konversation::DCC::Transfer* transfer);
         void startReverseDccSendTransfer(const QString& sourceNick,const QStringList& dccArguments);

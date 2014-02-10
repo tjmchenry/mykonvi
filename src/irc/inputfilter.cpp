@@ -45,6 +45,8 @@ InputFilter::~InputFilter()
 void InputFilter::setServer(Server* newServer)
 {
     m_server = newServer;
+    Application* konvApp = static_cast<Application*>(kapp);
+    connect(this, SIGNAL(notifyResponse(int, const QString&)), konvApp->getConnectionManager()->getNicksOnlineFilterModel(), SLOT(notifyResponse(int, const QString&)));
 }
 
 /*
@@ -1398,8 +1400,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
-                    // Tell server to start the next notify timer round
-                    emit notifyResponse(trailing);
+                    // Tell nicksonline about the most recent ISON report
+                    emit notifyResponse(m_server->connectionId(), trailing);
                 }
                 break;
             }

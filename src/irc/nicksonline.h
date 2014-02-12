@@ -107,6 +107,7 @@ class NicksOnline : public ChatWindow, private Ui::NicksOnlineWidgetUI
         QString getTextInLine();
 
     signals:
+        void doubleClicked(int sgId, const QString& nick);
         void showView(ChatWindow* view);
 
     public slots:
@@ -121,14 +122,14 @@ class NicksOnline : public ChatWindow, private Ui::NicksOnlineWidgetUI
         virtual void serverOnline(bool online);
 
         void addNickname();
-        void slotAddNickname(int sgId, const QString& nick);
+        void slotAddNickname(int cId, const QString& nick);
         void removeNickname();
         void createContact();
         void editContact();
         void changeAssociation();
         void openQuery();
 
-        void activated(const QModelIndex& index);
+        void doubleClicked(const QModelIndex& index);
         void currentChanged(const QModelIndex& current, const QModelIndex& previous);
         void collapsed(const QModelIndex& index);
         void expanded(const QModelIndex& index);

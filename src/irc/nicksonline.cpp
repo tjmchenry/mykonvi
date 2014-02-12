@@ -765,7 +765,7 @@ NicksOnline::NicksOnline(QWidget* parent) : ChatWindow(parent)
 
     Preferences::restoreColumnState(m_nicksOnlineView, "NicksOnline ViewSettings");
 
-    connect(m_nicksOnlineView, SIGNAL(activated(QModelIndex)), this, SLOT(activated(QModelIndex)));
+    connect(m_nicksOnlineView, SIGNAL(doubleClicked(QModelIndex)), this, SLOT(doubleClicked(QModelIndex)));
     connect(m_nicksOnlineView->selectionModel(), SIGNAL(currentChanged(QModelIndex, QModelIndex)), this, SLOT(currentChanged(QModelIndex, QModelIndex)));
     connect(m_nicksOnlineView, SIGNAL(collapsed(QModelIndex)), this, SLOT(collapsed(QModelIndex)));
     connect(m_nicksOnlineView, SIGNAL(expanded(QModelIndex)), this, SLOT(expanded(QModelIndex)));
@@ -930,20 +930,25 @@ void NicksOnline::currentChanged(const QModelIndex& current, const QModelIndex& 
 
 }
 
-void NicksOnline::activated(const QModelIndex& index)
+void NicksOnline::doubleClicked(const QModelIndex& index)
 {
-    // open a query with the target if it's a nick, no action if it's a server
-
+    // send double clicked signal with the target if it's a nick, no action if it's a server
     if (!index.isValid() || !index.parent().isValid())
         return;
 
     QString nick = index.data(ServerGroupModel::NickRole).toString();
-    Q_UNUSED(nick);
-    //find out if it has multiple connections
+    int sgId = index.data(ServerGroupModel::ServerGroupIdRole).toInt();
 
-        //if it does prompt user to choose
+    int cId = -1;
 
-        //if it doesn't open query window or reuse existing window
+    Application* konvApp = static_cast<Application*>(kapp);
+    ConnectionManager* conMan = konvApp->getConnectionManager();
+
+    if (conMan->getConnectedServerGroups().contains(sgId))
+        cId = conMan->getConnectedServerGroups().value(sgId);
+
+    if (cId >= 0)
+        emit doubleClicked(cId, nick);
 
     //TODO if it's a meta contact, with multiple connected servers, ask which one
 }

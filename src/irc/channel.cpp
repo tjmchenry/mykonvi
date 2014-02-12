@@ -431,7 +431,6 @@ void Channel::purgeNicks()
     //delete all nicks in the filter model
     if (m_channelNickListModel)
         m_channelNickListModel->removeAllNicks();
-
 }
 
 void Channel::contextMenu(const QPoint& pos)

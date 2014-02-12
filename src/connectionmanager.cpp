@@ -706,11 +706,9 @@ NickListModel* ConnectionManager::getNickListModel()
     if (!m_nickListModel)
     {
         m_nickListModel = new NickListModel(this);
-        m_nicksOnlineModel = new NicksOnlineFilterModel(this);
-        m_nicksOnlineModel->setSourceModel(Preferences::serverGroupModel());
 
-        connect(Preferences::serverGroupModel(), SIGNAL(addNotifyNick(int, QString)), m_nicksOnlineModel, SLOT(addNotifyNick(int, QString)));
-        connect(Preferences::serverGroupModel(), SIGNAL(removeNotifyNick(int, QString)), m_nicksOnlineModel, SLOT(removeNotifyNick(int, QString)));
+        if (!m_nicksOnlineModel) // start the object if it doesn't exist yet
+            getNicksOnlineFilterModel();
     }
 
     return m_nickListModel;
@@ -718,7 +716,16 @@ NickListModel* ConnectionManager::getNickListModel()
 
 NicksOnlineFilterModel* ConnectionManager::getNicksOnlineFilterModel()
 {
-    return m_nicksOnlineModel;
+    if (!m_nicksOnlineModel)
+    {
+        m_nicksOnlineModel = new NicksOnlineFilterModel(this);
+        m_nicksOnlineModel->setSourceModel(Preferences::serverGroupModel());
+
+        connect(Preferences::serverGroupModel(), SIGNAL(addNotifyNick(int, QString)), m_nicksOnlineModel, SLOT(addNotifyNick(int, QString)));
+        connect(Preferences::serverGroupModel(), SIGNAL(removeNotifyNick(int, QString)), m_nicksOnlineModel, SLOT(removeNotifyNick(int, QString)));
+    }
+
+     return m_nicksOnlineModel;
 }
 
 void ConnectionManager::involuntaryQuitServers()

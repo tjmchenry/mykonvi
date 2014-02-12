@@ -54,8 +54,7 @@ class IrcContextMenus : public QObject
             KickBanHost, KickBanDomain, KickBanUserHost, KickBanUserDomain,
             IgnoreNick, UnignoreNick,
             AddNotify, RemoveNotify,
-            DccSend, StartDccChat, StartDccWhiteboard,
-            AddressbookNew, AddressbookChange, AddressbookEdit, AddressbookDelete, SendEmail
+            DccSend, StartDccChat, StartDccWhiteboard
         };
 
         enum MenuOption
@@ -131,13 +130,6 @@ class IrcContextMenus : public QObject
         QAction* m_unignoreAction;
         QAction* m_addNotifyAction;
         QAction* m_removeNotifyAction;
-        static void updateAddressBookActions(Server* server, const QStringList& nicks);
-        KMenu* m_addressBookMenu;
-        QAction* m_addressBookNewAction;
-        QAction* m_addressBookChangeAction;
-        QAction* m_addressBookEditAction;
-        QAction* m_addressBookDeleteAction;
-        QAction* m_sendMailAction;
         void createSharedDccActions();
         QList<QAction*> m_sharedDccActions;
 

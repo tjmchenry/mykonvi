@@ -15,7 +15,6 @@
 #include "channeloptionsdialog.h"
 #include "application.h"
 #include "server.h"
-#include "nick.h"
 #include "quickbutton.h"
 #include "modebutton.h"
 #include "ircinput.h"

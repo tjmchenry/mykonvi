@@ -140,6 +140,7 @@ class Channel : public ChatWindow
 
     protected slots:
         void purgeNicks();
+        void contextMenu(const QPoint& pos);
 
 //Topic
     public:

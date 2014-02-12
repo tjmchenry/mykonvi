@@ -25,6 +25,7 @@
 #include "topichistorymodel.h"
 #include "notificationhandler.h"
 #include "viewcontainer.h"
+#include "nicklistmodel.h"
 
 #include <QSplitter>
 #include <QTimer>
@@ -185,6 +186,9 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
    // nicknameListView->installEventFilter(this);
 
     m_nicknameListView2 = new QListView(nickListButtons);
+    m_nicknameListView2->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    connect(m_nicknameListView2, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextMenu(QPoint)));
 
     // initialize buttons grid, will be set up in updateQuickButtons
     m_buttonsGrid = 0;
@@ -430,6 +434,11 @@ void Channel::purgeNicks()
 
 }
 
+void Channel::contextMenu(const QPoint& pos)
+{
+    IrcContextMenus::nickMenu(m_nicknameListView2->viewport()->mapToGlobal(pos), IrcContextMenus::ShowChannelActions, getServer(), getSelectedNickList(), getName());
+}
+
 void Channel::showOptionsDialog()
 {
     if (!m_optionsDialog)
@@ -669,7 +678,7 @@ QStringList Channel::getSelectedNickList()
 
     foreach (QModelIndex index, selected)
     {
-        selectedNicks.append(index.data(Qt::DisplayRole).toString());
+        selectedNicks.append(index.data(NickListModel::NickRole).toString());
     }
 
     return selectedNicks;

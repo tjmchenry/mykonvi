@@ -34,11 +34,11 @@ class NickListModel : public QAbstractListModel
 {
     Q_OBJECT
 
-    enum Roles {NickRole = Qt::UserRole, HostmaskRole};
-
     public:
         explicit NickListModel(QObject *parent = 0);
         ~NickListModel();
+
+        enum Roles {NickRole = Qt::UserRole, HostmaskRole};
 
         void clear();
 

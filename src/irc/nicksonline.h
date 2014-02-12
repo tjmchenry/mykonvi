@@ -40,8 +40,6 @@ class NickListModel;
 
 class NicksOnlineFilterModel : public QSortFilterProxyModel
 {
-    enum Roles {ServerGroupIdRole = Qt::UserRole};
-
     Q_OBJECT
 
     public:
@@ -99,8 +97,6 @@ class NicksOnline : public ChatWindow, private Ui::NicksOnlineWidgetUI
 {
     Q_OBJECT
 
-    enum Roles {ServerGroupIdRole = Qt::UserRole, NickRole = Qt::UserRole, HostmaskRole};
-
     public:
         explicit NicksOnline(QWidget* parent = 0);
         ~NicksOnline();
@@ -109,6 +105,9 @@ class NicksOnline : public ChatWindow, private Ui::NicksOnlineWidgetUI
 
         bool isInsertSupported() { return true; }
         QString getTextInLine();
+
+    signals:
+        void showView(ChatWindow* view);
 
     public slots:
         virtual void appendInputText(const QString&, bool fromCursor);

@@ -1615,6 +1615,10 @@ Query* Server::addQuery(const QString& nickname, bool weinitiated)
     if (!query)
     {
         QString lcNickname = nickname.toLower();
+
+        m_nickListModel2->addNickToChannel(connectionId(), nickname, getNickname());
+        m_nickListModel2->addNickToChannel(connectionId(), nickname, nickname);
+
         query = getViewContainer()->addQuery(this, nickname, weinitiated);
 
         query->indicateAway(m_away);

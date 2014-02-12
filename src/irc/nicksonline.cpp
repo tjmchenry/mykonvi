@@ -18,6 +18,7 @@
 #include "editnotifydialog.h"
 #include "server.h"
 #include "connectionmanager.h"
+#include "query.h"
 
 #include <QMultiHash>
 #include <KMenu>
@@ -802,7 +803,7 @@ void NicksOnline::addNickname()
     if (index.isValid())
     {
         if(index.parent().isValid())
-            sgId = index.data(ServerGroupIdRole).toInt();
+            sgId = index.data(ServerGroupModel::ServerGroupIdRole).toInt();
         else if (Preferences::serverGroupList().count() > index.row())
             sgId = Preferences::serverGroupByIndex(index.row())->id();
     }
@@ -835,7 +836,7 @@ void NicksOnline::removeNickname()
     if (!index.isValid() || !index.parent().isValid())
         return;
 
-    int sgId = index.data(ServerGroupIdRole).toInt();
+    int sgId = index.data(ServerGroupModel::ServerGroupIdRole).toInt();
 
     int selectedRow = -1;
     int notifyCount = Preferences::serverGroupById(sgId)->notifyList().count();
@@ -883,9 +884,20 @@ void NicksOnline::openQuery()
     if (!index.isValid() || !index.parent().isValid())
         return;
 
-    QString nick = index.data(NickRole).toString();
+    QString nick = index.data(ServerGroupModel::NickRole).toString();
+    int sgId = index.data(ServerGroupModel::ServerGroupIdRole).toInt();
 
-    //TODO open query with this nick or reuse existing one
+    Application* konvApp = static_cast<Application*>(kapp);
+    ConnectionManager* conMan = konvApp->getConnectionManager();
+
+    if (conMan->getConnectedServerGroups().contains(sgId))
+    {
+        Server* server = conMan->getServerByConnectionId(conMan->getConnectedServerGroups().value(sgId));
+
+        class Query* query = server->addQuery(nick, true /*we initiated*/);
+
+        emit showView(query);
+    }
 }
 
 void NicksOnline::currentChanged(const QModelIndex& current, const QModelIndex& previous)
@@ -925,7 +937,7 @@ void NicksOnline::activated(const QModelIndex& index)
     if (!index.isValid() || !index.parent().isValid())
         return;
 
-    QString nick = index.data(NickRole).toString();
+    QString nick = index.data(ServerGroupModel::NickRole).toString();
     Q_UNUSED(nick);
     //find out if it has multiple connections
 

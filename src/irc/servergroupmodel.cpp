@@ -874,6 +874,10 @@ QVariant ServerGroupModel::data(const QModelIndex& index, int role) const
         {
             return 1;
         }
+        else if (role == NickRole)
+        {
+            return serverGroup->notifyByIndex(index.row());
+        }
     }
 
     if (index.internalId() < 0 && index.row() < m_serverGroupList.count()) // server group item

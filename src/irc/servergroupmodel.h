@@ -26,7 +26,7 @@ class ServerGroupModel : public QAbstractListModel
         ServerGroupModel(QObject* parent = 0);
         ~ServerGroupModel();
 
-        enum Roles {ServerGroupIdRole = Qt::UserRole, ExpandedRole, IsServerRole};
+        enum Roles {ServerGroupIdRole = Qt::UserRole, ExpandedRole, IsServerRole, NickRole};
 
         void setServerGroupList(Konversation::ServerGroupList serverGroups);
         void addServerGroup(int serverGroupId, Konversation::ServerGroupSettingsPtr serverGroup);

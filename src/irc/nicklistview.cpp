@@ -265,12 +265,12 @@ bool NickListView::canDecodeMime(QDropEvent const *event) const {
         {
             const KUrl first = uris.first();
 
-            if (first.protocol() == QLatin1String("irc") ||
+            /*if (first.protocol() == QLatin1String("irc") ||
                 first.protocol() == QLatin1String("ircs") ||
                 channel->getNickList().containsNick(first.url()))
                 {
                     return false;
-                }
+                }*/
         }
         return true;
     }

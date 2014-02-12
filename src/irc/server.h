@@ -139,7 +139,6 @@ class Server : public QObject
         QAbstractItemModel* nickListModel() const;
         NickListModel* nickListModel2() const;
         void resetNickSelection();
-        void queueNicks(const QString& channelName, const QStringList& nicknameList);
         void addHostmaskToNick(const QString &sourceNick, const QString &sourceHostmask);
         Channel* nickJoinsChannel(const QString &channelName, const QString &nickname, const QString &hostmask);
         void renameNick(const QString &nickname,const QString &newNick);

@@ -121,6 +121,33 @@ void NickListModel::insertNick(int connectionId, Nick2* item)
     }
 }
 
+void NickListModel::insertNicksFromNames(int connectionId, const QString& channel, const QStringList& namesList)
+{
+    if (m_servers.contains(connectionId))
+    {
+        QStringList::const_iterator i;
+
+        for (i = namesList.constBegin(); i != namesList.constEnd(); ++i)
+        {
+            QString nickname = *i;
+            bool admin = false;
+            bool owner = false;
+            bool op = false;
+            bool halfop = false;
+            bool voice = false;
+
+            //This strips the mode chars off of the nick and sets the appropriate bools.
+            m_connectionManager->getServerByConnectionId(connectionId)->mangleNicknameWithModes(nickname, admin, owner, op, halfop, voice);
+
+            addNickToChannel(connectionId, channel, nickname);
+
+            Nick2* nick = getNick(connectionId, nickname);
+
+            nick->setMode(channel, admin, owner, op, halfop, voice);
+        }
+    }
+}
+
 void NickListModel::addNickToChannel(int connectionId, const QString& channel, const QString& nick)
 {
     if (m_servers.contains(connectionId))
@@ -758,6 +785,15 @@ QVariant ChannelNickListFilterModel::data(const QModelIndex& index, int role) co
     }
 
     return sourceModel()->data(mapToSource(index), role);
+}
+
+Nick2* ChannelNickListFilterModel::getNick(const QString& nick) const
+{
+    if (sourceNickModel())
+        return sourceNickModel()->getNick(m_connectionId, nick);
+
+    else
+        return NULL;
 }
 
 bool ChannelNickListFilterModel::isNickInChannel(const QString& nick) const

@@ -1850,15 +1850,15 @@ void Server::requestBan(const QStringList& users,const QString& channel,const QS
         if(!option.isEmpty())
         {
             // try to find specified nick on the channel
-            Nick* targetNick=targetChannel->getNickByName(mask);
+            Nick2* targetNick = targetChannel->getNickByName(mask);
             // if we found the nick try to find their hostmask
             if(targetNick)
             {
-                QString hostmask=targetNick->getChannelNick()->getHostmask();
+                QString hostmask = targetNick->getHostmask();
                 // if we found the hostmask, add it to the ban mask
                 if(!hostmask.isEmpty())
                 {
-                    mask=targetNick->getChannelNick()->getNickname()+'!'+hostmask;
+                    mask = targetNick->getNickname()+'!'+hostmask;
 
                     // adapt ban mask to the option given
                     if(option=="host")
@@ -2614,7 +2614,7 @@ Channel* Server::joinChannel(const QString& name, const QString& hostmask)
 
     m_nickListModel2->setNickHostmask(m_connectionId, getNickname(), hostmask);
 
-    channel->joinNickname(channelNick);
+    channel->joinNickname(getNickname());
 
     return channel;
 }
@@ -2734,12 +2734,6 @@ ChatWindow* Server::getChannelOrQueryByName(const QString& name)
         window = getQueryByName(name);
 
     return window;
-}
-
-void Server::queueNicks(const QString& channelName, const QStringList& nicknameList)
-{
-    Channel* channel = getChannelByName(channelName);
-    if (channel) channel->queueNicks(nicknameList);
 }
 
 // Adds a nickname to the joinedChannels list.
@@ -3118,7 +3112,7 @@ Channel* Server::nickJoinsChannel(const QString &channelName, const QString &nic
         {
             nickInfo->setHostmask(hostmask);
         }
-        outChannel->joinNickname(channelNick);
+        outChannel->joinNickname(nickname);
     }
 
     return outChannel;
@@ -3144,11 +3138,10 @@ Channel* Server::removeNickFromChannel(const QString &channelName, const QString
     Channel* outChannel = getChannelByName(channelName);
     if(outChannel)
     {
-        outChannel->flushNickQueue();
         ChannelNickPtr channelNick = getChannelNick(channelName, nickname);
         if(channelNick)
         {
-            outChannel->removeNick(channelNick,reason,quit);
+            outChannel->removeNick(nickname, reason, quit);
         }
     }
 
@@ -3173,12 +3166,11 @@ void Server::nickWasKickedFromChannel(const QString &channelName, const QString 
     Channel* outChannel = getChannelByName(channelName);
     if(outChannel)
     {
-        outChannel->flushNickQueue();
         ChannelNickPtr channelNick = getChannelNick(channelName, nickname);
 
         if(channelNick)
         {
-          outChannel->kickNick(channelNick, kicker, reason);
+          outChannel->kickNick(nickname, kicker, reason);
           // Tell Nickinfo
           removeChannelNick(channelName,nickname);
         }
@@ -3189,9 +3181,8 @@ void Server::removeNickFromServer(const QString &nickname,const QString &reason)
 {
     foreach (Channel* channel, m_channelList)
     {
-        channel->flushNickQueue();
         // Check if nick is in this channel or not.
-        if(channel->getNickByName(nickname))
+        if(getChannelNick(channel->getName(), nickname))
             removeNickFromChannel(channel->getName(),nickname,reason,true);
     }
 
@@ -3232,10 +3223,9 @@ void Server::renameNick(const QString &nickname, const QString &newNick)
         // Rename the nick in every channel they are in
         foreach (Channel* channel, m_channelList)
         {
-            channel->flushNickQueue();
 
             // All we do is notify that the nick has been renamed.. we haven't actually renamed it yet
-            if (channel->getNickByName(nickname)) channel->nickRenamed(nickname, *nickInfo);
+            channel->nickRenamed(nickname, newNick);
         }
     }
 

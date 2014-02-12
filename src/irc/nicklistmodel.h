@@ -46,6 +46,7 @@ class NickListModel : public QAbstractListModel
         void removeServer(int connectionId);
 
         void insertNick(int connectionId, Nick2* item);
+        void insertNicksFromNames(int connectionId, const QString& channel, const QStringList& namesList);
         void addNickToChannel(int connectionId, const QString& channel, const QString& nick);
 
         void removeNick(int connectionId, const QString& nick);
@@ -140,6 +141,7 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
         bool nickActivityLessThan(const Nick2* left, const Nick2* right) const;
 
         bool isNickAnyTypeOfOp(const QString& nick) const;
+        Nick2* getNick(const QString& nick) const;
 
     public slots:
         void nickCompletion(IRCInput* inputBar);

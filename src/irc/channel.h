@@ -18,7 +18,6 @@
 
 #include "server.h"
 #include "chatwindow.h"
-#include "channelnick.h"
 #include "nicklistmodel.h"
 
 #ifdef HAVE_QCA2
@@ -44,7 +43,6 @@ class KHBox;
 class KComboBox;
 
 class AwayLabel;
-class NickListView;
 class Nick;
 class QuickButton;
 class ModeButton;
@@ -54,21 +52,14 @@ class TopicHistoryModel;
 class CipherFilterProxyModel;
 class ChannelNickListFilterModel;
 
+class Nick2;
+
 namespace Konversation
 {
     class TopicLabel;
     class ChannelOptionsDialog;
     class ChannelSettings;
 }
-
-class NickList : public QList<Nick*>
-{
-    public:
-        NickList();
-
-        bool containsNick(const QString& nickname);
-
-};
 
 class Channel : public ChatWindow
 {
@@ -114,11 +105,8 @@ class Channel : public ChatWindow
         virtual bool log();
 
     protected:
-        // use with caution! does not check for duplicates
-        void fastAddNickname(ChannelNickPtr channelnick, Nick *nick=0);
         void setActive(bool active);
-        void repositionNick(Nick *nick);
-        bool shouldShowEvent(ChannelNickPtr channelNick);
+        bool shouldShowEvent(const QString& nick);
 
         QString getCurrentTopic();
 
@@ -135,38 +123,24 @@ class Channel : public ChatWindow
         void updateAutoWho();
         void fadeActivity();
         virtual void serverOnline(bool online);
-        void delayedSortNickList();
 
 
 //Nicklist
     public:
-        void flushNickQueue();
-
-        ChannelNickPtr getOwnChannelNick() const;
-        ChannelNickPtr getChannelNick(const QString &ircnick) const;
-
-        void joinNickname(ChannelNickPtr channelNick);
-        void removeNick(ChannelNickPtr channelNick, const QString &reason, bool quit);
-        void kickNick(ChannelNickPtr channelNick, const QString &kicker, const QString &reason);
-        void addNickname(ChannelNickPtr channelNick);
-        void nickRenamed(const QString &oldNick, const NickInfo& channelnick);
-        void queueNicks(const QStringList& nicknameList);
+        void joinNickname(const QString& nickname);
+        void removeNick(const QString& nickname, const QString &reason, bool quit);
+        void kickNick(const QString& nickname, const QString &kicker, const QString &reason);
+        void nickRenamed(const QString &oldNick, const QString& nickname);
         void endOfNames();
-        Nick *getNickByName(const QString& lookname) const;
-        NickList getNickList() const { return nicknameList; }
+        Nick2* getNickByName(const QString& nickname) const;
 
-        void adjustNicks(int value);
-        void adjustOps(int value);
         virtual void emitUpdateInfo();
 
         void resizeNicknameListViewColumns();
 
     protected slots:
         void purgeNicks();
-        void processQueuedNicks(bool flush = false);
 
-        void updateNickInfos();
-        void updateChannelNicks(const QString& channel);
 //Topic
     public:
         QString getTopic();
@@ -234,8 +208,6 @@ class Channel : public ChatWindow
 
         QStringList getSelectedNickList();
 
-        NickListView* getNickListView() const { return nicknameListView; }
-
         Konversation::ChannelSettings channelSettings() const;
 
     signals:
@@ -274,12 +246,6 @@ class Channel : public ChatWindow
         void nicknameComboboxChanged();
         /// Enable/disable the mode buttons depending on whether you are op or not.
         void refreshModeButtons();
-
-//only the GUI cares about sorted nicklists
-        ///Request a delayed nicklist sorting
-        void requestNickListSort();
-        ///Sort the nicklist
-        void sortNickList(bool delayed=false);
 
         void nicknameListViewTextChanged(int textChangedFlags);
     protected:
@@ -320,10 +286,7 @@ class Channel : public ChatWindow
 
         KLineEdit* limit; //TODO: this GUI element is the only storage for the mode
 
-        NickListView* nicknameListView;
         QListView* m_nicknameListView2;
-        QListView* m_nicknameAllListView;
-        QTreeView* m_nicknameListTreeView;
 
         ChannelNickListFilterModel* m_channelNickListModel;
         KHBox* commandLineBox;
@@ -339,10 +302,8 @@ class Channel : public ChatWindow
 
 //Members from here to end are not GUI
         bool m_joined;
-        NickList nicknameList;
         QTimer userhostTimer;
         int m_nicknameListViewTextChanged;
-        QHash<QString, Nick*> m_nicknameNickHash;
 
         TopicHistoryModel* m_topicHistory;
         QStringList m_BanList;
@@ -361,7 +322,6 @@ class Channel : public ChatWindow
         int m_delayedSortTrigger;
 
         QStringList m_modeList;
-        ChannelNickPtr m_ownChannelNick;
 
         bool pendingNicks; ///< are there still nicks to be added by /names reply?
         int nicks; ///< How many nicks on the channel

@@ -238,10 +238,13 @@ namespace Konversation
 
     void ChannelOptionsDialog::refreshEnableModes(bool forceUpdate)
     {
-        if(!m_channel->getOwnChannelNick() || m_channel->getOwnChannelNick()->isChanged() || forceUpdate)
+        Nick2* nick = m_channel->getNickByName(m_channel->getServer()->getNickname());
+
+        //FIXME this relied on nick's reporting if they've changed, we need to call refreshenablemodes with a signal instead
+        if(!nick || forceUpdate)
         {
             // cache the value
-            m_isAnyTypeOfOp = m_channel->getOwnChannelNick() ? m_channel->getOwnChannelNick()->isAnyTypeOfOp() : false;
+            m_isAnyTypeOfOp = nick ? nick->isAnyTypeOfOp(m_channel->getName()) : false;
 
             m_ui.topicEdit->setReadOnly(!m_isAnyTypeOfOp && m_ui.topicModeChBox->isChecked());
 

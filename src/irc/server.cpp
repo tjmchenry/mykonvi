@@ -2651,7 +2651,8 @@ void Server::removeNickFromServer(const QString &nickname,const QString &reason)
 {
     foreach (Channel* channel, m_channelList)
     {
-        removeNickFromChannel(channel->getName(),nickname,reason,true);
+        if (m_nickListModel2->isNickInChannel(connectionId(), channel->getName(), nickname))
+            removeNickFromChannel(channel->getName(),nickname,reason,true);
     }
 
     Query* query = getQueryByName(nickname);

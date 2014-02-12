@@ -177,9 +177,11 @@ void NickListModel::removeNick(int connectionId, const QString& nick)
         uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][lcNick]);
 
         beginRemoveRows(m_servers[connectionId], position, position);
-        m_nickHashes[connectionId].remove(lcNick);
+        Nick2* nickObject = m_nickHashes[connectionId].take(lcNick);
         m_nickLists[connectionId].removeAt(position);
         endRemoveRows();
+
+        delete nickObject;
 
         //TODO have nicks added on join through input filter instead of current channel/server
         //mishmash. use signals / slots to connect them

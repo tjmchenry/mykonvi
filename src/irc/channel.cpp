@@ -848,7 +848,12 @@ void Channel::removeNick(const QString& nickname, const QString& reason, bool qu
             displayReason += "\017";
     }
 
-    Nick2* nick = m_channelNickListModel->getNick(nickname);
+    QString hostmask = QString();
+
+    Nick2* nick = getNickByName(nickname);
+
+    if (nick)
+        hostmask = nick->getHostmask();
 
     if(nickname == m_server->getNickname())
     {
@@ -858,7 +863,7 @@ void Channel::removeNick(const QString& nickname, const QString& reason, bool qu
             if (quit)
             {
                 if (displayReason.isEmpty())
-                    appendCommandMessage(i18nc("Message type", "Quit"), i18n("You (%1) have left this server.", nick->getHostmask()));
+                    appendCommandMessage(i18nc("Message type", "Quit"), i18n("You (%1) have left this server.", hostmask));
                 else
                     appendCommandMessage(i18nc("Message type", "Quit"), i18nc("%1 = our hostmask, %2 = reason", "You (%1) have left this server (%2).",
                         nick->getHostmask(), displayReason), false);
@@ -869,7 +874,7 @@ void Channel::removeNick(const QString& nickname, const QString& reason, bool qu
                     appendCommandMessage(i18nc("Message type", "Part"), i18n("You have left channel %1.", getName()));
                 else
                     appendCommandMessage(i18nc("Message type", "Part"), i18nc("%1 = our hostmask, %2 = channel, %3 = reason",
-                        "You (%1) have left channel %2 (%3).", nick->getHostmask(), getName(), displayReason), false);
+                        "You (%1) have left channel %2 (%3).", hostmask, getName(), displayReason), false);
             }
         }
 
@@ -884,19 +889,19 @@ void Channel::removeNick(const QString& nickname, const QString& reason, bool qu
             {
                 if (displayReason.isEmpty())
                     appendCommandMessage(i18nc("Message type", "Quit"), i18n("%1 (%2) has left this server.", nickname,
-                        nick->getHostmask()), false);
+                        hostmask), false);
                 else
                     appendCommandMessage(i18nc("Message type", "Quit"), i18nc("%1 = nick, %2 = hostname, %3 = reason",
-                        "%1 (%2) has left this server (%3).", nickname, nick->getHostmask(), displayReason), false);
+                        "%1 (%2) has left this server (%3).", nickname, hostmask, displayReason), false);
             }
             else
             {
                 if (displayReason.isEmpty())
                     appendCommandMessage(i18nc("Message type", "Part"), i18n("%1 (%2) has left this channel.", nickname,
-                        nick->getHostmask()), false);
+                        hostmask), false);
                 else
                     appendCommandMessage(i18nc("Message type", "Part"), i18nc("%1 = nick, %2 = hostmask, %3 = reason",
-                        "%1 (%2) has left this channel (%3).", nickname, nick->getHostmask(), displayReason), false);
+                        "%1 (%2) has left this channel (%3).", nickname, hostmask, displayReason), false);
             }
         }
     }

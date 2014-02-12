@@ -108,10 +108,10 @@ Query::~Query()
 {
     if (m_recreationScheduled)
     {
-        qRegisterMetaType<NickInfoPtr>("NickInfoPtr");
+        qRegisterMetaType<Nick2*>("Nick2");
 
         QMetaObject::invokeMethod(m_server, "addQuery", Qt::QueuedConnection,
-            Q_ARG(NickInfoPtr, m_nickInfo), Q_ARG(bool, true));
+            Q_ARG(Nick2*, m_nick), Q_ARG(bool, true));
     }
 }
 
@@ -121,8 +121,6 @@ void Query::setServer(Server* newServer)
     {
         connect(newServer, SIGNAL(connectionStateChanged(Server*,Konversation::ConnectionState)),
                 SLOT(connectionStateChanged(Server*,Konversation::ConnectionState)));
-        connect(newServer, SIGNAL(nickInfoChanged(Server*,NickInfoPtr)),
-                this, SLOT(updateNickInfo(Server*,NickInfoPtr)));
     }
 
     ChatWindow::setServer(newServer);
@@ -184,8 +182,8 @@ void Query::setName(const QString& newName)
 
         if(Preferences::self()->addHostnameToLog())
         {
-            if(m_nickInfo)
-                logName += m_nickInfo->getHostmask();
+            if(m_nick)
+                logName += m_nick->getHostmask();
         }
 
         setLogfileName(logName);
@@ -343,35 +341,42 @@ void Query::childAdjustFocus()
     m_inputBar->setFocus();
 }
 
-void Query::setNickInfo(const NickInfoPtr & nickInfo)
+void Query::setNick(Nick2* nick)
 {
-    m_nickInfo = nickInfo;
-    Q_ASSERT(m_nickInfo); if(!m_nickInfo) return;
-    nickInfoChanged();
+    m_nick = nick;
+    Q_ASSERT(m_nick); if(!m_nick) return;
+    nickChanged();
+
+    connect(m_nick, SIGNAL(nickChanged(QString)), this, SLOT(nickChanged()));
 }
 
-void Query::updateNickInfo(Server* server, NickInfoPtr nickInfo)
+Nick2* Query::getNick()
 {
-    if (!m_nickInfo || server != m_server || nickInfo != m_nickInfo)
+    return m_nick;
+}
+
+void Query::updateNick(Server* server, Nick2* nick)
+{
+    if (!m_nick || server != m_server || nick != m_nick)
         return;
 
-    nickInfoChanged();
+    nickChanged();
 }
 
-void Query::nickInfoChanged()
+void Query::nickChanged()
 {
-    if (m_nickInfo)
+    if (m_nick)
     {
-        setName(m_nickInfo->getNickname());
-        QString text = m_nickInfo->getBestAddresseeName();
-        if(!m_nickInfo->getHostmask().isEmpty() && !text.isEmpty())
+        setName(m_nick->getNickname());
+        QString text = m_nick->getBestPersonName();
+        if(!m_nick->getHostmask().isEmpty() && !text.isEmpty())
             text += " - ";
-        text += m_nickInfo->getHostmask();
-        if(m_nickInfo->isAway() && !m_nickInfo->getAwayMessage().isEmpty())
-            text += " (" + m_nickInfo->getAwayMessage() + ") ";
+        text += m_nick->getHostmask();
+        if(m_nick->isAway() && !m_nick->getAwayMessage().isEmpty())
+            text += " (" + m_nick->getAwayMessage() + ") ";
         queryHostmask->setText(Konversation::removeIrcMarkup(text));
 
-        KABC::Picture pic = m_nickInfo->getAddressee().photo();
+        /* KABC::Picture pic = m_nickInfo->getAddressee().photo();
         if(pic.isIntern())
         {
             QPixmap qpixmap = QPixmap::fromImage(pic.data().scaledToHeight(queryHostmask->height(), Qt::SmoothTransformation));
@@ -407,17 +412,13 @@ void Query::nickInfoChanged()
         {
             addresseelogoimage->hide();
         }
+        */
 
-        QString strTooltip;
-        QTextStream tooltip( &strTooltip, QIODevice::WriteOnly );
+        addresseelogoimage->hide();
+        addresseelogoimage->hide();
 
-        tooltip << "<qt>";
+        QString strTooltip = getNick()->getQueryTooltip();
 
-        tooltip << "<table cellspacing=\"5\" cellpadding=\"0\">";
-
-        m_nickInfo->tooltipTableData(tooltip);
-
-        tooltip << "</table></qt>";
         queryHostmask->setToolTip(strTooltip);
         addresseeimage->setToolTip(strTooltip);
         addresseelogoimage->setToolTip(strTooltip);
@@ -431,11 +432,6 @@ void Query::nickInfoChanged()
 
     emit updateQueryChrome(this,getName());
     emitUpdateInfo();
-}
-
-NickInfoPtr Query::getNickInfo()
-{
-    return m_nickInfo;
 }
 
 bool Query::canBeFrontView()        { return true; }
@@ -494,10 +490,10 @@ void Query::urlsDropped(const KUrl::List urls)
 void Query::emitUpdateInfo()
 {
     QString info;
-    if(m_nickInfo->loweredNickname() == m_server->loweredNickname())
+    if(m_nick->getLoweredNickname() == m_server->loweredNickname())
         info = i18n("Talking to yourself");
-    else if(m_nickInfo)
-        info = m_nickInfo->getBestAddresseeName();
+    else if(m_nick)
+        info = m_nick->getBestPersonName();
     else
         info = getName();
 
@@ -512,7 +508,7 @@ void Query::quitNick(const QString& reason)
     if (displayReason.isEmpty())
     {
         appendCommandMessage(i18nc("Message type", "Quit"), i18nc("%1 = nick, %2 = hostmask", "%1 (%2) has left this server.",
-            getName(), getNickInfo()->getHostmask()), false);
+            getName(), getNick()->getHostmask()), false);
     }
     else
     {
@@ -520,7 +516,7 @@ void Query::quitNick(const QString& reason)
             displayReason+="\017";
 
         appendCommandMessage(i18nc("Message type", "Quit"), i18nc("%1 = nick, %2 = hostmask, %3 = reason", "%1 (%2) has left this server (%3).",
-            getName(), getNickInfo()->getHostmask(), displayReason), false);
+            getName(), getNick()->getHostmask(), displayReason), false);
     }
 }
 

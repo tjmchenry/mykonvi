@@ -14,7 +14,7 @@
 #define QUERY_H
 
 #include "chatwindow.h"
-#include "nickinfo.h"
+#include "nick2.h"
 
 #include <config-konversation.h>
 
@@ -49,12 +49,12 @@ class Query : public ChatWindow
         /** This will always be called soon after this object is created.
          *  @param nickInfo A nickinfo that must exist.
          */
-        void setNickInfo(const NickInfoPtr & nickInfo);
+        void setNick(Nick2* nick);
         /** It seems that this does _not_ guaranttee to return non null.
          *  The problem is when you open a query to someone, then the go offline.
          *  This should be fixed maybe?  I don't know.
          */
-        NickInfoPtr getNickInfo();
+        Nick2* getNick();
         virtual bool closeYourself(bool askForConfirmation=true);
         virtual bool canBeFrontView();
         virtual bool searchView();
@@ -90,8 +90,8 @@ class Query : public ChatWindow
         void urlsDropped(const KUrl::List urls);
         // connected to IRCInput::textPasted() - used to handle large/multiline pastes
         void textPasted(const QString& text);
-        void nickInfoChanged();
-        void updateNickInfo(Server* server, NickInfoPtr nickInfo);
+        void nickChanged();
+        void updateNick(Server* server, Nick2* nick);
 
     protected:
         void setName(const QString& newName);
@@ -112,7 +112,7 @@ class Query : public ChatWindow
         QLabel* addresseelogoimage;
         QLabel* blowfishLabel;
         AwayLabel* awayLabel;
-        NickInfoPtr m_nickInfo;
+        Nick2* m_nick;
 
         bool m_initialShow;
 

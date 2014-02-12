@@ -2490,7 +2490,7 @@ Query* ViewContainer::addQuery(Server* server, const QString& nickname, bool wei
 {
     Query* query=new Query(m_tabWidget, nickname);
     query->setServer(server);
-    //query->setNickInfo(nickInfo); //still have to do this
+    query->setNick(server->getNick(nickname)); //still have to do this
     addView(query, nickname, weinitiated);
 
     // About to increase the number of queries, so enable the close action

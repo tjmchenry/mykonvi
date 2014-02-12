@@ -2350,6 +2350,9 @@ void InputFilter::parsePrivMsg(const QString& prefix, QStringList& parameterList
     {
         if(!isIgnore(prefix,Ignore::Query))
         {
+            m_server->nickListModel2()->addNickToChannel(m_server->connectionId(), source, parameterList.value(0));
+            m_server->nickListModel2()->addNickToChannel(m_server->connectionId(), source, source);
+
             m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), source, sourceHostmask);
 
             // Create a new query (server will check for dupes)

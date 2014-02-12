@@ -230,17 +230,24 @@ void ServerGroupModel::removeNotify(int serverGroupId, int index)
         int position = m_serverGroupList.indexOf(m_serverGroupHash[serverGroupId]);
         QModelIndex parent = ServerGroupModel::index(position, 0);
 
+        QString nick = m_serverGroupHash[serverGroupId]->notifyByIndex(index);
+
         beginRemoveRows(parent, index, index);
         m_serverGroupHash[serverGroupId]->removeNotifyByIndex(index);
         endRemoveRows();
+
+        emit removeNotifyNick(serverGroupId, nick);
     }
 }
 
 bool ServerGroupModel::removeNotify(int serverGroupId, const QString& nick)
 {
-    if (m_serverGroupHash.contains(serverGroupId) && m_serverGroupHash[serverGroupId]->notifyList().contains(nick))
+    if (m_serverGroupHash.contains(serverGroupId) && m_serverGroupHash[serverGroupId]->notifyList().contains(nick, Qt::CaseInsensitive))
     {
-        removeNotify(serverGroupId, m_serverGroupHash[serverGroupId]->notifyList().indexOf(nick));
+        QRegExp pattern(nick);
+        pattern.setCaseSensitivity(Qt::CaseInsensitive);
+
+        removeNotify(serverGroupId, m_serverGroupHash[serverGroupId]->notifyList().indexOf(pattern));
 
         return true;
     }
@@ -259,6 +266,8 @@ bool ServerGroupModel::addNotify(int serverGroupId, const QString& nick)
         beginInsertRows(parent, newIndex, newIndex);
         m_serverGroupHash[serverGroupId]->addNotify(nick);
         endInsertRows();
+
+        emit addNotifyNick(serverGroupId, nick);
 
         return true;
     }

@@ -1546,8 +1546,6 @@ void Server::ctcpReply(const QString &receiver,const QString &text)
 // 0 if not found.
 Nick2* Server::getNick(const QString& nickname)
 {
-    QString lcNickname = nickname.toLower();
-
     return nickListModel2()->getNick(connectionId(), nickname);
 }
 
@@ -1557,8 +1555,6 @@ Nick2* Server::getNick(const QString& nickname)
 // Returns the NickInfo object if nick is on any lists, otherwise 0.
 void Server::setChannelNick(const QString& channelName, const QString& nickname, unsigned int mode)
 {
-    QString lcNickname = nickname.toLower();
-
     m_nickListModel2->addNickToChannel(m_connectionId, channelName, nickname);
 
     //TODO why 99?
@@ -2590,7 +2586,7 @@ bool Server::isWatchedNick(const QString& nickname)
 {
     if (getServerGroup())
     {
-        return getServerGroup()->notifyList().contains(nickname);
+        return getServerGroup()->notifyList().contains(nickname, Qt::CaseInsensitive);
     }
 
     return false;

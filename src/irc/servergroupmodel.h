@@ -20,6 +20,7 @@
 
 class ServerGroupModel : public QAbstractListModel
 {
+    Q_OBJECT
 
     public:
         ServerGroupModel(QObject* parent = 0);
@@ -58,6 +59,10 @@ class ServerGroupModel : public QAbstractListModel
         Qt::ItemFlags flags(const QModelIndex& index) const;
         bool hasChildren(const QModelIndex& index) const;
         QHash<int, QByteArray> roleNames() const;
+
+    signals:
+        void addNotifyNick(int serverGroupId, const QString& nick);
+        void removeNotifyNick(int serverGroupId, const QString& nick);
 
     private:
         Konversation::ServerGroupHash m_serverGroupHash;

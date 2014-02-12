@@ -708,6 +708,9 @@ NickListModel* ConnectionManager::getNickListModel()
         m_nickListModel = new NickListModel(this);
         m_nicksOnlineModel = new NicksOnlineFilterModel(this);
         m_nicksOnlineModel->setSourceModel(Preferences::serverGroupModel());
+
+        connect(Preferences::serverGroupModel(), SIGNAL(addNotifyNick(int, QString)), m_nicksOnlineModel, SLOT(addNotifyNick(int, QString)));
+        connect(Preferences::serverGroupModel(), SIGNAL(removeNotifyNick(int, QString)), m_nicksOnlineModel, SLOT(removeNotifyNick(int, QString)));
     }
 
     return m_nickListModel;

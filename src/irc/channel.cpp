@@ -979,9 +979,6 @@ void Channel::kickNick(const QString& nickname, const QString& kicker, const QSt
 
 Nick2* Channel::getNickByName(const QString& nickname) const
 {
-    //FIXME getnick should use the lowered nick
-    //QString lcLookname(lookname.toLower());
-
     return m_channelNickListModel->getNick(nickname);
 }
 

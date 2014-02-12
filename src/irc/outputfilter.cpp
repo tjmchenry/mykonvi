@@ -1269,7 +1269,7 @@ namespace Konversation
             for (int index = 0; index < list.count(); ++index)
             {
                 // If pattern does not exist
-                if (!Preferences::serverGroupById(serverGroupId)->notifyList().contains(list[index]))
+                if (!Preferences::serverGroupById(serverGroupId)->notifyList().contains(list[index], Qt::CaseInsensitive))
                 {
                     // Add it
                     if (Preferences::addNotify(serverGroupId, list[index]))

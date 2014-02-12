@@ -53,6 +53,7 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
 
     public slots:
         void removeNotifyNick(int sgId, const QString& nick);
+        void addNotifyNick(int sgId, const QString& nick);
         void updateNotifyConnection(int sgId, int cId);
 
         void notifyResponse(int cId, const QString& newIson);

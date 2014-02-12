@@ -41,9 +41,6 @@
 #include <KHBox>
 #include <KComboBox>
 
-
-#define DELAYED_SORT_TRIGGER    10
-
 using namespace Konversation;
 using Konversation::ChannelOptionsDialog;
 
@@ -55,10 +52,6 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
     //     This effectively assigns the name twice, but none of the other logic has been moved or updated.
     name=_name;
     m_optionsDialog = NULL;
-    m_delayedSortTimer = 0;
-    m_delayedSortTrigger = 0;
-    m_processedNicksCount = 0;
-    m_processedOpsCount = 0;
     m_initialNamesReceived = false;
     nicks = 0;
     ops = 0;
@@ -282,10 +275,6 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
     m_cipherFilterModel->setSourceModel(m_topicHistory);
 #endif
 
-    // Setup delayed sort timer
-    m_delayedSortTimer = new QTimer(this);
-    m_delayedSortTimer->setSingleShot(true);
-    connect(m_delayedSortTimer, SIGNAL(timeout()), this, SLOT(delayedSortNickList()));
 }
 
 //FIXME there is some logic in setLogfileName that needs to be split out and called here if the server display name gets changed

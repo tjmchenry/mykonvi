@@ -314,13 +314,7 @@ class Channel : public ChatWindow
 
         QTimer m_fadeActivityTimer; ///< For the smoothing function used in activity sorting
 
-        QStringList m_nickQueue;
-        int m_processedNicksCount;
-        int m_processedOpsCount;
         bool m_initialNamesReceived;
-
-        QTimer* m_delayedSortTimer;
-        int m_delayedSortTrigger;
 
         QStringList m_modeList;
 

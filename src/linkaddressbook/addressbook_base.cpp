@@ -159,9 +159,8 @@ namespace Konversation
             QString ircnick;
             QString serverOrGroup;
             Application::splitNick_Server(*it, ircnick, serverOrGroup);
-            NickInfoPtr nickInfo =
-                dynamic_cast<Application*>(kapp)->getNickInfo(ircnick, serverOrGroup);
-            if(nickInfo)
+            NickInfoPtr nickInfo = NickInfoPtr();
+            if(!nickInfo.isNull())
             {
                 if(!nickInfo->isAway())
                     return nickInfo;

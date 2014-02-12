@@ -246,5 +246,5 @@ void ChannelNick::setTimeStamp(uint stamp)
 void ChannelNick::markAsChanged()
 {
     setChanged(true);
-    m_nickInfo->getServer()->startChannelNickChangedTimer(m_channel);
+    //m_nickInfo->getServer()->startChannelNickChangedTimer(m_channel);
 }

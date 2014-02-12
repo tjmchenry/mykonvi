@@ -704,7 +704,7 @@ void IrcContextMenus::processNickAction(int actionId, Server* server, const QStr
         {
             foreach(const QString& nick, nicks)
             {
-                NickInfoPtr nickInfo = server->getNickInfo(nick);
+                NickInfoPtr nickInfo = NickInfoPtr();
 
                 if (nickInfo.isNull())
                     continue;
@@ -729,7 +729,7 @@ void IrcContextMenus::processNickAction(int actionId, Server* server, const QStr
             {
                 foreach(const QString& nick, nicks)
                 {
-                    NickInfoPtr nickInfo = server->getNickInfo(nick);
+                    NickInfoPtr nickInfo = NickInfoPtr();
 
                     if (nickInfo.isNull())
                         continue;
@@ -767,7 +767,7 @@ void IrcContextMenus::processNickAction(int actionId, Server* server, const QStr
         {
             foreach(const QString& nick, nicks)
             {
-                NickInfoPtr nickInfo = server->getNickInfo(nick);
+                NickInfoPtr nickInfo = NickInfoPtr();
 
                 if (nickInfo.isNull())
                     continue;
@@ -785,7 +785,7 @@ void IrcContextMenus::processNickAction(int actionId, Server* server, const QStr
 
             foreach(const QString& nick, nicks)
             {
-                NickInfoPtr nickInfo = server->getNickInfo(nick);
+                NickInfoPtr nickInfo = NickInfoPtr();
 
                 if (nickInfo.isNull())
                     continue;
@@ -876,7 +876,7 @@ void IrcContextMenus::updateAddressBookActions(Server* server, const QStringList
 
     foreach(const QString& nick, nicks)
     {
-        NickInfoPtr nickInfo =  server->getNickInfo(nick);
+        NickInfoPtr nickInfo =  NickInfoPtr();
 
         if (nickInfo.isNull())
             continue;

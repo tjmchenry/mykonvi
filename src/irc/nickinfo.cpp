@@ -155,7 +155,7 @@ void NickInfo::setNickname(const QString& newNickname)
 void NickInfo::startNickInfoChangedTimer()
 {
     setChanged(true);
-    m_owningServer->startNickInfoChangedTimer();
+    //m_owningServer->startNickInfoChangedTimer();
 }
 
 void NickInfo::setHostmask(const QString& newMask)

@@ -776,8 +776,7 @@ namespace Konversation
             // Note we have to be a bit careful here.
             // We only want to create ('obtain') a new nickinfo if we have done /query
             // or "/msg nick".  Not "/msg nick message".
-            NickInfoPtr nickInfo = m_server->obtainNickInfo(recipient);
-            ::Query* query = m_server->addQuery(nickInfo, true /*we initiated*/);
+            ::Query* query = m_server->addQuery(recipient, true /*we initiated*/);
 
             // Force focus if the user did not specify any message.
             if (output.isEmpty() && Preferences::self()->focusNewQueries()) emit showView(query);

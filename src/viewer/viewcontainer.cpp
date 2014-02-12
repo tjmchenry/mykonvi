@@ -2486,13 +2486,12 @@ void ViewContainer::toggleChannelNicklists()
     }
 }
 
-Query* ViewContainer::addQuery(Server* server, const NickInfoPtr& nickInfo, bool weinitiated)
+Query* ViewContainer::addQuery(Server* server, const QString& nickname, bool weinitiated)
 {
-    QString name = nickInfo->getNickname();
-    Query* query=new Query(m_tabWidget, name);
+    Query* query=new Query(m_tabWidget, nickname);
     query->setServer(server);
-    query->setNickInfo(nickInfo); //still have to do this
-    addView(query, name, weinitiated);
+    //query->setNickInfo(nickInfo); //still have to do this
+    addView(query, nickname, weinitiated);
 
     // About to increase the number of queries, so enable the close action
     if (m_queryViewCount == 0)

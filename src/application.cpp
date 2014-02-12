@@ -1067,25 +1067,6 @@ void Application::splitNick_Server(const QString& nick_server, QString &ircnick,
     serverOrGroup = nickServer.section('@',1);
 }
 
-NickInfoPtr Application::getNickInfo(const QString &ircnick, const QString &serverOrGroup)
-{
-    const QList<Server*> serverList = getConnectionManager()->getServerList();
-    NickInfoPtr nickInfo;
-    QString lserverOrGroup = serverOrGroup.toLower();
-    foreach (Server* lookServer, serverList)
-    {
-        if (lserverOrGroup.isEmpty()
-            || lookServer->getServerName().toLower()==lserverOrGroup
-            || lookServer->getDisplayName().toLower()==lserverOrGroup)
-        {
-            nickInfo = lookServer->getNickInfo(ircnick);
-            if (nickInfo)
-                return nickInfo;         //If we found one
-        }
-    }
-    return (NickInfoPtr)0;
-}
-
 // auto replace on input/output
 QPair<QString, int> Application::doAutoreplace(const QString& text, bool output, int cursorPos)
 {

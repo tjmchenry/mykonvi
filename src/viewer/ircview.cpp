@@ -944,7 +944,7 @@ QString IRCView::createNickLine(const QString& nick, const QString& defaultColor
         if (m_server)
         {
             if (nick != m_server->getNickname())
-                nickColor = Preferences::self()->nickColor(m_server->obtainNickInfo(nick)->getNickColor()).name();
+                nickColor = Preferences::self()->nickColor(m_server->getNick(nick)->getNickColor()).name();
             else
                 nickColor =  Preferences::self()->nickColor(8).name();
         }
@@ -2057,8 +2057,7 @@ void IRCView::openLink(const QUrl& url)
     {
         QString recipient(link);
         recipient.remove('#');
-        NickInfoPtr nickInfo = m_server->obtainNickInfo(recipient);
-        m_server->addQuery(nickInfo, true /*we initiated*/);
+        m_server->addQuery(recipient, true /*we initiated*/);
     }
 }
 

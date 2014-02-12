@@ -174,7 +174,7 @@ class ViewContainer : public QObject
         void openChannelSettings();
         void toggleChannelNicklists();
 
-        Query* addQuery(Server* server,const NickInfoPtr & name, bool weinitiated=true);
+        Query* addQuery(Server* server, const QString& nickname, bool weinitiated = true);
         void updateQueryChrome(ChatWindow* view, const QString& name);
         void closeQueries();
 

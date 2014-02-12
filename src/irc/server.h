@@ -17,16 +17,15 @@
 #define SERVER_H
 
 #include "common.h"
-#include "channelnick.h"
 #include "inputfilter.h"
 #include "outputfilter.h"
-#include "nickinfo.h"
 #include "nicklistmodel.h"
 #include "serversettings.h"
 #include "servergroupsettings.h"
 #include "connectionsettings.h"
 #include "statuspanel.h"
 #include "invitedialog.h"
+#include "nick2.h"
 #include <config-konversation.h>
 
 #ifdef HAVE_QCA2
@@ -139,7 +138,8 @@ class Server : public QObject
         QAbstractItemModel* nickListModel() const;
         NickListModel* nickListModel2() const;
         void resetNickSelection();
-        void addHostmaskToNick(const QString &sourceNick, const QString &sourceHostmask);
+        void addHostmaskToNick(const QString& sourceNick, const QString& sourceHostmask);
+        QString getNickHostmask(const QString& sourceNick) const;
         Channel* nickJoinsChannel(const QString &channelName, const QString &nickname, const QString &hostmask);
         void renameNick(const QString &nickname,const QString &newNick);
         Channel* removeNickFromChannel(const QString &channelName, const QString &nickname, const QString &reason, bool quit=false);
@@ -227,25 +227,6 @@ class Server : public QObject
          * but server doesn't know if it is or not, in which case False is returned.
          */
         bool isNickOnline(const QString &nickname);
-        /** Given a nickname, returns NickInfo object.
-         *  @param nickname    The desired nickname.  Case insensitive.
-         *  @return            Pointer to the nickinfo for this nickname if one exists.
-         *                     0 if not known to be online.
-         *
-         *  A NickInfo pointer will only be returned if the nickname is known to the Konvi
-         *  Server object.  A nick will be known if:
-         *  - It is in one of the server's channels user has joined.
-         *  - It is on the notify list and is known to be online.
-         *  - The nick initiated a query with the user.
-         *  A NickInfo is destroyed when it is offline.
-         */
-        NickInfoPtr getNickInfo(const QString& nickname);
-        /** Given a nickname, returns an existing NickInfo object, or creates a new NickInfo object.
-         *  Guaranteed to return a nickinfo.
-         *  @param nickname    The desired nickname.  Case sensitive.
-         *  @return            Pointer to the found or created NickInfo object.
-         */
-        NickInfoPtr obtainNickInfo(const QString& nickname);
         /** Returns a list of all the NickInfos that are online and known to the server.
          * Caller should not modify the list.
          * A nick will be known if:
@@ -254,39 +235,6 @@ class Server : public QObject
          *  - The nick initiated a query with the user.
          *
          * @return A QMap of KSharedPtrs to NickInfos indexed by lowercase nickname.
-         */
-        const NickInfoMap* getAllNicks();
-        /** Returns the list of members for a channel in the joinedChannels list.
-         *  A joinedChannel is one that you are in, as opposed to a channel that you aren't in,
-         *  but one of your watched nicks is in.
-         *  Code that calls this must not modify the list.
-         *  @param channelName Name of desired channel.  Case insensitive.
-         *  @return            A map of all the nicks in the channel.
-         *                     0 if channel is not in the joinedChannels list.
-         */
-        const ChannelNickMap *getJoinedChannelMembers(const QString& channelName) const;
-        /** Returns the list of members for a channel in the unjoinedChannels list.
-         *  An unjoinedChannel is a channel you aren't in.  As such, this is only going to return
-         *  nicks that you know are in that channel because a /whois has been done against them.
-         *  This could be done automatically if they are on the watch list.
-         *  Code that calls this must not modify the list.
-         *  @param channelName Name of desired channel.  Case insensitive.
-         *  @return            A map of only the nicks that we know that are in the channel.
-         *                     0 if channel is not in the unjoinedChannels list.
-         */
-        const ChannelNickMap *getUnjoinedChannelMembers(const QString& channelName) const;
-        /** Searches the Joined and Unjoined lists for the given channel and returns the member list.
-         *  Code that calls this must not modify the list.
-         *  @param channelName Name of desired channel.  Case insensitive.
-         *  @return            A map of nicks in that channel.  0 if channel is not in either list.
-         *
-         *  @see getJoinedChannelMembers(const QString& channelName)
-         *  @see getUnjoinedChannelMembers(const QString& channelName)
-         */
-        const ChannelNickMap *getChannelMembers(const QString& channelName) const;
-        /** Returns a list of all the joined channels that a nick is in.
-         *  @param nickname    The desired nickname.  Case insensitive.
-         *  @return            A list of joined channels the nick is in.  Empty if none.
          */
         QStringList getSharedChannels(const QString& nickname);
         /** Returns a list of all the channels (joined or unjoined) that a nick is in.
@@ -301,7 +249,7 @@ class Server : public QObject
          *  @param nickname    The desired nickname.  Case insensitive.
          *  @return            A list of channels the nick is in that we're also in.  Empty if none.
          */
-        ChannelNickPtr getChannelNick(const QString& channelName, const QString& nickname);
+        Nick2* getNick(const QString& nickname);
         /** Updates a nickname in a channel.  If not on the joined or unjoined lists, and nick
          *  is in the watch list, adds the channel and nick to the unjoinedChannels list.
          *  If mode != 99, sets the mode for the nick in the channel.
@@ -311,17 +259,12 @@ class Server : public QObject
          *  @param mode        Bit mask containing the modes the nick has in the channel,
          *                     or 99 if not known.  See channelnick.cpp for bit definitions.
          */
-        ChannelNickPtr setChannelNick(const QString& channelName, const QString& nickname, unsigned int mode = 99);
+        void setChannelNick(const QString& channelName, const QString& nickname, unsigned int mode = 99);
 
         /**
          * Returns a QList of all channels
          */
         const QList<Channel *>& getChannelList() const { return m_channelList; }
-
-        /**
-         * Returns a lower case list of all the nicks on the user watch list plus nicks in the addressbook.
-         */
-        QStringList getWatchList();
         /**
          * Return true if the given nickname is on the watch list.
          */
@@ -330,21 +273,7 @@ class Server : public QObject
          * Returns a list of all the nicks on the watch list that are not in joined
          * channels.  ISON command is sent for these nicks.
          */
-        QStringList getISONList();
-        QString getISONListString();
-
         ViewContainer* getViewContainer() const;
-
-        /** Adds a nickname to the joinedChannels list.
-         *  Creates new NickInfo if necessary.
-         *  If needed, moves the channel from the unjoined list to the joined list.
-         *  If needed, moves the nickname from the Offline to Online lists.
-         *  If mode != 99 sets the mode for this nick in this channel.
-         *  @param channelName The channel name.  Case sensitive.
-         *  @param nickname    The nickname.  Case sensitive.
-         *  @return            The NickInfo for the nickname.
-         */
-        ChannelNickPtr addNickToJoinedChannelsList(const QString& channelName, const QString& nickname);
 
         void setAllowedChannelModes(const QString& modes) { m_allowedChannelModes = modes; }
         QString allowedChannelModes() const { return m_allowedChannelModes; }
@@ -417,25 +346,6 @@ class Server : public QObject
         //FIXME can anyone who can connect to a Server signal not know about an IRCQueue?
         void sentStat(int bytes, int encodedBytes);
 
-        //Note that these signals haven't been implemented yet.
-        /// Fires when the information in a NickInfo object changes.
-        void nickInfoChanged(Server* server, const NickInfoPtr nickInfo);
-        /// Emitted once if one or more NickInfo has been changed.
-        void nickInfoChanged();
-        /// Emitted once if one or more ChannelNick has been changed in @p channel.
-        void channelNickChanged(const QString& channel);
-
-        /// Fires when a nick leaves or joins a channel.  Based on joined flag, receiver could
-        /// call getJoinedChannelMembers or getUnjoinedChannelMembers, or just
-        /// getChannelMembers to get a list of all the nicks now in the channel.
-        /// parted indicates whether the nick joined or left the channel.
-        void channelMembersChanged(Server* server, const QString& channelName, bool joined, bool parted, const QString& nickname);
-
-        /// Fires when a channel is moved to/from the Joinied/Unjoined lists.
-        /// joined indicates which list it is now on.  Note that if joined is False, it is
-        /// possible the channel does not exist in any list anymore.
-        void channelJoinedOrUnjoined(Server* server, const QString& channelName, bool joined);
-
         /// Fires when a nick on the watch list goes online or offline.
         void watchedNickChanged(Server* server, const QString& nickname, bool online);
         ///Fires when the user switches his state to away and has enabled "Insert Remember Line on away" in his identity.
@@ -464,7 +374,7 @@ class Server : public QObject
          *  @param weinitiated This is whether we initiated this - did we do /query, or somebody else sending us a message.
          *  @return A pointer to a new or already-existing query.  Guaranteed to be non-null
          */
-        Query *addQuery(const NickInfoPtr & nickInfo, bool weinitiated);
+        Query *addQuery(const QString& nickname, bool weinitiated);
         void closeQuery(const QString &name);
         void closeChannel(const QString &name);
         void reconnectServer(const QString& quitMessage = QString());
@@ -514,11 +424,6 @@ class Server : public QObject
 
         void announceWatchedNickOnline(const QString& nickname);
         void announceWatchedNickOffline(const QString& nickname);
-
-        /// Start the NickInfo changed timer if it isn't started already
-        void startNickInfoChangedTimer();
-        /// Start the ChannelNick changed timer if it isn't started already
-        void startChannelNickChangedTimer(const QString& channel);
 
         /// Called when the system wants to close the connection due to network going down etc.
         void involuntaryQuit();
@@ -588,15 +493,6 @@ class Server : public QObject
         /// Update the encoding shown in the mainwindow's actions
         void updateEncoding();
 
-        /** Called when the NickInfo changed timer times out.
-          * Emits the nickInfoChanged() signal for all changed NickInfos
-          */
-        void sendNickInfoChangedSignals();
-        /** Called when the ChannelNick changed timer times out.
-          * Emits the channelNickChanged() signal for each channel with changed nicks.
-          */
-        void sendChannelNickChangedSignals();
-
         void requestOpenChannelListPanel(const QString& filter);
 
     private slots:
@@ -617,57 +513,6 @@ class Server : public QObject
         void connectSignals();
 
         int _send_internal(QString outputline); ///< Guts of old send, isn't a slot.
-
-        /** Adds a nickname to the unjoinedChannels list.
-         *  Creates new NickInfo if necessary.
-         *  If needed, moves the channel from the joined list to the unjoined list.
-         *  If needed, moves the nickname from the Offline to the Online list.
-         *  If mode != 99 sets the mode for this nick in this channel.
-         *  @param channelName The channel name.  Case sensitive.
-         *  @param nickname    The nickname.  Case sensitive.
-         *  @return            The NickInfo for the nickname.
-         */
-        ChannelNickPtr addNickToUnjoinedChannelsList(const QString& channelName, const QString& nickname);
-
-        /**
-         * If nickname is no longer on any channel list, or the query list, delete it altogether.
-         * Call this routine only if the nick is not on the notify list or is on the notify
-         * list but is known to be offline.
-         * @param nickname           The nickname to be deleted.  Case insensitive.
-         * @return                   True if the nickname is deleted.
-         */
-        bool deleteNickIfUnlisted(const QString &nickname);
-
-        /**
-         * If not already offline, changes a nick to the offline state.
-         * Removes it from all channels on the joined and unjoined lists.
-         * If the nick is in the watch list, and went offline, emits a signal,
-         * posts a Notify message, and posts a KNotify.
-         * If the nick is in the addressbook, and went offline, informs addressbook of change.
-         * If the nick goes offline, the NickInfo is deleted.
-         *
-         * @param nickname     The nickname.  Case sensitive.
-         * @return             True if the nick was online.
-         */
-        bool setNickOffline(const QString& nickname);
-
-        /** Remove nickname from a channel (on joined or unjoined lists).
-         *  @param channelName The channel name.  Case insensitive.
-         *  @param nickname    The nickname.  Case insensitive.
-         */
-        void removeChannelNick(const QString& channelName, const QString& nickname);
-
-        /** Remove channel from the joined list.
-         *  Nicknames in the channel are added to the unjoined list if they are in the watch list.
-         *  @param channelName The channel name.  Case insensitive.
-         */
-        void removeJoinedChannel(const QString& channelName);
-
-        /** Renames a nickname in all NickInfo lists.
-         *  @param nickInfo    Pointer to existing NickInfo object.
-         *  @param newname     New nickname for the nick.  Case sensitive.
-         */
-        void renameNickInfo(NickInfoPtr nickInfo, const QString& newname);
 
         bool getAutoJoin() const;
         void setAutoJoin(bool on);
@@ -759,21 +604,6 @@ class Server : public QObject
         /// Creates a list of known users and returns the one chosen by the user
         inline QString recipientNick() const;
 
-        /// All nicks known to this server.  Note this is NOT a list of all nicks on the server.
-        /// Any nick appearing in this list is online, but may not necessarily appear in
-        /// any of the joined or unjoined channel lists because a WHOIS has not yet been
-        /// performed on the nick.
-        NickInfoMap m_allNicks;
-        /// List of membership lists for joined channels.  A "joined" channel is a channel
-        /// that user has joined, i.e., a tab appears for the channel in the main window.
-        ChannelMembershipMap m_joinedChannels;
-        /// List of membership lists for unjoined channels.  These come from WHOIS responses.
-        /// Note that this is NOT a list of all channels on the server, just those we are
-        /// interested in because of nicks in the Nick Watch List.
-        ChannelMembershipMap m_unjoinedChannels;
-        /// List of nicks in Queries.
-        NickInfoMap m_queryNicks;
-
         QString m_allowedChannelModes;
 
         int m_topicLength;
@@ -815,8 +645,6 @@ class Server : public QObject
 
         QPointer<InviteDialog> m_inviteDialog;
 
-        QTimer* m_nickInfoChangedTimer;
-        QTimer* m_channelNickChangedTimer;
         QStringList m_changedChannels;
 
         bool m_recreationScheduled;

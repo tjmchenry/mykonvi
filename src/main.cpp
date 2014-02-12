@@ -18,6 +18,7 @@
 #include "commit.h"
 
 #include <QWaitCondition>
+#include <QMutex>
 
 #include <KCmdLineArgs>
 #include <KAboutData>

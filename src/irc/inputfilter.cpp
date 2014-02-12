@@ -249,11 +249,8 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
                 {
                     m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), sourceNick, sourceHostmask);
 
-                    NickInfoPtr nickinfo = m_server->obtainNickInfo(sourceNick);
-                    nickinfo->setHostmask(sourceHostmask);
-
                     // create new query (server will check for dupes)
-                    Query* query = m_server->addQuery(nickinfo, false /* we didn't initiate this*/ );
+                    Query* query = m_server->addQuery(sourceNick, false /* we didn't initiate this*/ );
 
                     // send action to query
                     query->appendAction(sourceNick, ctcpArgument);
@@ -1066,11 +1063,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
-                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
-                    if (nickInfo)
-                    {
-                        nickInfo->setIdentified(true);
-                    }
+                    m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), parameterList.value(1), true);
+
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
@@ -1260,7 +1254,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                         else
                         {
                             // Update Server window
-                            m_server->obtainNickInfo(m_server->getNickname()) ;
                             m_server->renameNick(m_server->getNickname(), newNick);
                             // Show message
                             m_server->appendMessageToFrontmost(i18n("Nick"), i18n("Nickname already in use. Trying %1.", newNick));
@@ -1290,7 +1283,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                         }
                         else
                         {
-                            m_server->obtainNickInfo(m_server->getNickname()) ;
                             m_server->renameNick(m_server->getNickname(), newNick);
                             m_server->appendMessageToFrontmost(i18n("Nick"), i18n("Erroneus nickname. Changing nick to %1.", newNick));
                             m_server->queue("NICK "+newNick);
@@ -1411,17 +1403,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 {
                     m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(1), true, trailing);
 
-                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
-                    if (nickInfo)
-                    {
-                        nickInfo->setAway(true);
-                        if (nickInfo->getAwayMessage() != trailing) // FIXME i think this check should be in the setAwayMessage method
-                        {
-                            nickInfo->setAwayMessage(trailing);
-                            // TEST this used to skip the automatic request handler below
-                        }
-                    }
-
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
                         m_server->appendMessageToFrontmost(i18n("Away"),
@@ -1458,12 +1439,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), parameterList.value(1), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
                     m_server->nickListModel2()->setNickRealName(m_server->connectionId(), parameterList.value(1), trailing);
 
-                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
-                    if (nickInfo)
-                    {
-                        nickInfo->setHostmask(i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
-                        nickInfo->setRealName(trailing);
-                    }
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
@@ -1518,12 +1493,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 {
                     m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), parameterList.value(1), true);
 
-                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
-
-                    if (nickInfo)
-                    {
-                        nickInfo->setIdentified(true);
-                    }
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
                         // Prints "psn is an identified user"
@@ -1551,7 +1520,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(6))
                 {
-                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(5));
                                                     // G=away G@=away,op G+=away,voice
                     bool bAway = parameterList.value(6).toUpper().startsWith('G');
 
@@ -1560,17 +1528,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     m_server->nickListModel2()->setNickRealName(m_server->connectionId(), parameterList.value(5), trailing.section(' ', 1));
                     m_server->nickListModel2()->setNickNetServer(m_server->connectionId(), parameterList.value(5), parameterList.value(4));
 
-                    if (nickInfo)
-                    {
-                        nickInfo->setHostmask(i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
-                                                    //Strip off the "0 "
-                        nickInfo->setRealName(trailing.section(' ', 1));
-                        nickInfo->setAway(bAway);
-                        if(!bAway)
-                        {
-                            nickInfo->setAwayMessage(QString());
-                        }
-                    }
                     // Display message only if this was not an automatic request.
                     if (!m_whoRequestList.isEmpty())     // for safe
                     {
@@ -1738,18 +1695,10 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 {
                     m_server->nickListModel2()->setNickNetServer(m_server->connectionId(), parameterList.value(1), parameterList.value(2));
                     m_server->nickListModel2()->setNickNetServerInfo(m_server->connectionId(), parameterList.value(1), trailing);
+                    // Clear the away state on assumption that if nick is away, this message will be followed
+                    // by a 301 RPL_AWAY message.  Not necessary a invalid assumption, but what can we do?
                     m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(1), false);
 
-                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
-                    if (nickInfo)
-                    {
-                        nickInfo->setNetServer(parameterList.value(2));
-                        nickInfo->setNetServerInfo(trailing);
-                        // Clear the away state on assumption that if nick is away, this message will be followed
-                        // by a 301 RPL_AWAY message.  Not necessary a invalid assumption, but what can we do?
-                        nickInfo->setAway(false);
-                        nickInfo->setAwayMessage(QString());
-                    }
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
@@ -1813,10 +1762,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     if (!signonTime.isNull())
                     {
                         m_server->nickListModel2()->setNickOnlineSince(m_server->connectionId(), parameterList.value(1), signonTime);
-                        NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
-
-                        if (nickInfo)
-                            nickInfo->setOnlineSince(signonTime);
                     }
 
                     // if idle time is longer than a day
@@ -1877,9 +1822,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
-                    /*FIXME why is the nickinfo line below commented out?
-                //NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(1));
-                    */
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
@@ -1991,12 +1933,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 {
                     m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(0), true);
 
-                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(0));
-                    if (nickInfo)
-                    {
-                        nickInfo->setAway(true);
-                    }
-
                     m_server->setAway(true);
                 }
                 break;
@@ -2006,13 +1942,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 if (plHas(1))
                 {
                     m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(0), false);
-                    NickInfoPtr nickInfo = m_server->getNickInfo(parameterList.value(0));
-
-                    if (nickInfo)
-                    {
-                        nickInfo->setAway(false);
-                        nickInfo->setAwayMessage(QString());
-                    }
 
                     m_server->setAway(false);
                 }
@@ -2111,7 +2040,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                             m_server->disconnectServer();
                         else
                         {
-                            m_server->obtainNickInfo(m_server->getNickname()) ;
                             m_server->renameNick(m_server->getNickname(), newNick);
                             m_server->appendMessageToFrontmost(i18n("Nick"),
                                 i18n("Nickname %1 is unavailable. Trying %2.", parameterList.value(1), newNick));
@@ -2196,9 +2124,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     m_server->appendStatusMessage(i18n("Info"), i18n("SASL authentication successful."));
                     m_server->capEndNegotiation();
                     m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), m_server->getNickname(), true);
-
-                    NickInfoPtr nickInfo = m_server->getNickInfo(m_server->getNickname());
-                    if (nickInfo) nickInfo->setIdentified(true);
                 }
 
                 break;
@@ -2427,11 +2352,8 @@ void InputFilter::parsePrivMsg(const QString& prefix, QStringList& parameterList
         {
             m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), source, sourceHostmask);
 
-            NickInfoPtr nickinfo = m_server->obtainNickInfo(source);
-            nickinfo->setHostmask(sourceHostmask);
-
             // Create a new query (server will check for dupes)
-            Query* query = m_server->addQuery(nickinfo, false /*we didn't initiate this*/ );
+            Query* query = m_server->addQuery(source, false /*we didn't initiate this*/ );
 
             // send action to query
             query->appendQuery(source, message);

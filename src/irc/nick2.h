@@ -16,7 +16,8 @@
 #define NICK2_H
 
 #include <QObject>
-#include "server.h"
+#include <QTextStream>
+#include <QDateTime>
 
 typedef QHash<char, bool> Modes;
 typedef QHash<QString, QVariant> ChannelProperties;

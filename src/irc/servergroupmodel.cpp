@@ -236,6 +236,18 @@ void ServerGroupModel::removeNotify(int serverGroupId, int index)
     }
 }
 
+bool ServerGroupModel::removeNotify(int serverGroupId, const QString& nick)
+{
+    if (m_serverGroupHash.contains(serverGroupId) && m_serverGroupHash[serverGroupId]->notifyList().contains(nick))
+    {
+        removeNotify(serverGroupId, m_serverGroupHash[serverGroupId]->notifyList().indexOf(nick));
+
+        return true;
+    }
+
+    return false;
+}
+
 bool ServerGroupModel::addNotify(int serverGroupId, const QString& nick)
 {
     if (m_serverGroupHash.contains(serverGroupId))

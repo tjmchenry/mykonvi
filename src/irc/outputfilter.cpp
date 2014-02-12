@@ -1261,26 +1261,30 @@ namespace Konversation
         QStringList added;
         QStringList removed;
 
-        /*if (!input.parameter.isEmpty() && serverGroupId != -1)
+        if (!input.parameter.isEmpty() && Preferences::serverGroupHash().contains(serverGroupId))
         {
             QStringList list = input.parameter.split(' ', QString::SkipEmptyParts);
 
 
             for (int index = 0; index < list.count(); ++index)
             {
-                // Try to remove current pattern.
-                if (!Preferences::removeNotify(serverGroupId, list[index]))
+                // If pattern does not exist
+                if (!Preferences::serverGroupById(serverGroupId)->notifyList().contains(list[index]))
                 {
-                    // If remove failed, try to add it instead.
+                    // Add it
                     if (Preferences::addNotify(serverGroupId, list[index]))
                         added << list[index];
                 }
                 else
-                    removed << list[index];
+                {
+                    // Otherwise, remove it
+                    if (Preferences::removeNotify(serverGroupId, list[index]))
+                        removed << list[index];
+                }
             }
-        }*/
+        }
 
-        QString list = QString(); // Preferences::notifyListByGroupId(serverGroupId).join(", ");
+        QString list = Preferences::notifyListByGroupId(serverGroupId).join(", ");
 
         if (list.isEmpty())
         {

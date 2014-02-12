@@ -32,6 +32,7 @@ class ServerGroupModel : public QAbstractListModel
         void removeServerGroup(int serverGroupId);
         void removeServer(int serverGroupId, int index);
         void removeNotify(int serverGroupId, int index);
+        bool removeNotify(int serverGroupId, const QString& nick);
         bool addNotify(int serverGroupId, const QString& nick);
 
         Konversation::ServerGroupSettingsPtr getServerGroupById(int serverGroupId) const;

@@ -96,7 +96,7 @@ class NickListModel : public QAbstractListModel
 
     signals:
         void nickOnline(int sgId, int connectionId, const QString& nick);
-        void nickOffline(int sgId, int connectionId, const QString& nick);
+        void nickOffline(int sgId, int connectionId, Nick2* nick);
 
     private:
         QHash<int, QList<Nick2*> > m_nickLists;

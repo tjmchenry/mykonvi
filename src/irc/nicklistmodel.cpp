@@ -112,11 +112,11 @@ void NickListModel::insertNick(int connectionId, Nick2* item)
 
         //TODO have nicks added on join through input filter instead of current channel/server
         //mishmash. use signals / slots to connect them
-        if (isNotifyNick(connectionId, item->getLoweredNickname()))
+        if (isNotifyNick(connectionId, item->getNickname()))
         {
             //TODO this will need to be different for meta contacts..
             int sgId = m_connectionManager->getServerByConnectionId(connectionId)->getServerGroup()->id();
-            emit nickOnline(sgId, connectionId, item->getLoweredNickname());
+            emit nickOnline(sgId, connectionId, item->getNickname());
         }
     }
 }
@@ -154,7 +154,17 @@ void NickListModel::addNickToChannel(int connectionId, const QString& channel, c
     {
         if (!isNickOnline(connectionId, nick))
         {
-            Nick2* newNick = new Nick2(connectionId, nick);
+            Nick2* newNick;
+
+            if (isNotifyNick(connectionId, nick) && m_connectionManager->getNicksOnlineFilterModel()->isWatchedNickOnline(connectionId, nick))
+            {
+                newNick = m_connectionManager->getNicksOnlineFilterModel()->getWatchedNick(connectionId, nick);
+            }
+            else
+            {
+                newNick = new Nick2(connectionId, nick);
+            }
+
             insertNick(connectionId, newNick);
         }
 
@@ -181,15 +191,15 @@ void NickListModel::removeNick(int connectionId, const QString& nick)
         m_nickLists[connectionId].removeAt(position);
         endRemoveRows();
 
-        delete nickObject;
-
-        //TODO have nicks added on join through input filter instead of current channel/server
-        //mishmash. use signals / slots to connect them
         if (isNotifyNick(connectionId, nick))
         {
             int sgId = m_connectionManager->getServerByConnectionId(connectionId)->getServerGroup()->id();
-            emit nickOffline(sgId, connectionId, nick);
+            emit nickOffline(sgId, connectionId, nickObject);
         }
+        else
+            delete nickObject;
+
+
     }
 }
 
@@ -227,16 +237,20 @@ void NickListModel::removeAllNicksFromChannel(int connectionId, const QString& c
             uint position = m_nickLists[connectionId].indexOf(i.value());
             if (!i.value()->isInAnyChannel())
             {
-                if (isNotifyNick(connectionId, i.key()))
-                {
-                    int sgId = m_connectionManager->getServerByConnectionId(connectionId)->getServerGroup()->id();
-                    emit nickOffline(sgId, connectionId, i.key());
-                }
+                Nick2* nick = i.value();
 
                 beginRemoveRows(m_servers[connectionId], position, position);
                 i = m_nickHashes[connectionId].erase(i);
                 m_nickLists[connectionId].removeAt(position);
                 endRemoveRows();
+
+                if (isNotifyNick(connectionId, nick->getNickname()))
+                {
+                    int sgId = m_connectionManager->getServerByConnectionId(connectionId)->getServerGroup()->id();
+                    emit nickOffline(sgId, connectionId, nick);
+                }
+                else
+                    delete nick;
             }
             else
             {

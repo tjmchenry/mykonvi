@@ -68,6 +68,7 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
 
         void removeNotifyNick(int sgId, int cId, const QString& nick);
         void addNotifyNick(int sgId, int cId, Nick2* nick);
+        void replaceNotifyNick(int sgId, int cId, Nick2* nick);
         bool isWatchTypeEmpty(int type) const;
         bool isNickWatched(int sgId, int cId, const QString& nick) const;
         bool isWatchedNickOnline(int sgId, int cId, const QString& nick) const;

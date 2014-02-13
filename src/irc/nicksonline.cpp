@@ -387,18 +387,24 @@ void NicksOnlineFilterModel::nickOnline(int sgId, int cId, const QString& nick)
 
 void NicksOnlineFilterModel::nickOffline(int sgId, int cId, Nick2* nick)
 {
+    QString nickname = nick->getNickname();
+
     //if the nick is in the watched list, and it is offline, then we can safely declare it offline.
-    if (isNickWatched(sgId, cId, nick->getNickname()))
+    if (isNickWatched(sgId, cId, nickname))
     {
         if (Preferences::serverGroupHash().contains(sgId))
         {
             QStringList notifyList = Preferences::serverGroupById(sgId)->notifyList();
 
-            if (notifyList.contains(nick->getNickname(), Qt::CaseInsensitive))
+            if (notifyList.contains(nickname, Qt::CaseInsensitive))
             {
-                nick->setPrintedOnline(false);
+                // Since it's now really offline, all of the information stored in the nick is now invalid, replace it
+                Nick2* newNick = new Nick2(cId, nickname);
+                newNick->setPrintedOnline(false);
 
-                QRegExp pattern(nick->getNickname());
+                replaceNotifyNick(sgId, cId, newNick);
+
+                QRegExp pattern(nickname);
                 pattern.setCaseSensitivity(Qt::CaseInsensitive);
 
                 QModelIndex parent = NicksOnlineFilterModel::index(Preferences::serverGroupList().indexOf(Preferences::serverGroupById(sgId)), m_column, QModelIndex());
@@ -407,7 +413,7 @@ void NicksOnlineFilterModel::nickOffline(int sgId, int cId, Nick2* nick)
                 //TODO when we can dep Qt 5 we can specify what roles have changed.
                 emit dataChanged(firstIndex, lastIndex); //, QVector<int>() << Qt::DisplayRole);
 
-                m_connectionManager->getServerByConnectionId(cId)->announceWatchedNickOffline(nick->getNickname());
+                m_connectionManager->getServerByConnectionId(cId)->announceWatchedNickOffline(nickname);
             }
         }
         else
@@ -487,6 +493,21 @@ Nick2* NicksOnlineFilterModel::getWatchedNick(int sgId, int cId, const QString& 
     }
 
     return NULL;
+}
+
+void NicksOnlineFilterModel::replaceNotifyNick(int sgId, int cId, Nick2* nick)
+{
+    if (isNickWatched(sgId, cId, nick->getNickname()))
+    {
+        QString lcNick = nick->getLoweredNickname();
+
+        if (m_watchedNicks[sgId][cId][0].contains(lcNick))
+            m_watchedNicks[sgId][cId][0][lcNick] = nick;
+        else if (m_watchedNicks[sgId][cId][1].contains(lcNick))
+            m_watchedNicks[sgId][cId][1][lcNick] = nick;
+        else if (m_watchedNicks[sgId][cId][2].contains(lcNick))
+            m_watchedNicks[sgId][cId][2][lcNick] = nick;
+    }
 }
 
 void NicksOnlineFilterModel::addNotifyNick(int sgId, const QString& nick)

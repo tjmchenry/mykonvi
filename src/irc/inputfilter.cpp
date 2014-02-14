@@ -1544,6 +1544,22 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 }
                 break;
             }
+            // From a WHOIS (when you have the permissions to view it, e.g. you whois yourself)
+            // [23:29] [378] word word is connecting from *@[true hostmask] [ip]
+            // where true hostmask is not a custom one like ~word@konversation/developer/word which is why we don't set a nick's hostmask off of this.
+            case RPL_WHOISHOST:
+            {
+                if (plHas(2))
+                {
+                    if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
+                    {
+                        m_server->appendMessageToFrontmost(i18n("Whois"), i18nc("%1 = the target user's nick, %2 = the target user's hostname and ip address",
+                                                                                "%1 is connecting from %2", parameterList.value(1), trailing.section(' ', 3)));
+                    }
+                }
+
+                break;
+            }
             // From a WHOIS.
             //[19:11] :zahn.freenode.net 320 PhantomsDad psn :is an identified user
             case RPL_WHOISIDENTIFY:

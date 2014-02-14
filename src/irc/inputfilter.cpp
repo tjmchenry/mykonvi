@@ -1588,17 +1588,18 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             }
             case RPL_WHOISSECURE:
             {
-                if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(1)))
-                {
-                    m_nickListModel->setNickSecureConnection(m_connectionId, parameterList.value(1), true);
-                }
-                else if (Preferences::self()->useNotify() && m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(1)))
-                {
-                    m_nicksOnlineModel->setNickSecureConnection(m_serverGroupId, m_connectionId, parameterList.value(1), true);
-                }
-
                 if (plHas(2))
                 {
+
+                    if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nickListModel->setNickSecureConnection(m_connectionId, parameterList.value(1), true);
+                    }
+                    else if (Preferences::self()->useNotify() && m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nicksOnlineModel->setNickSecureConnection(m_serverGroupId, m_connectionId, parameterList.value(1), true);
+                    }
+
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                         m_server->appendMessageToFrontmost(i18n("Whois"), i18n("%1 is using a secure connection.", parameterList.value(1)));
                 }

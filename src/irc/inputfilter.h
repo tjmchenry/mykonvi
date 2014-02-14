@@ -22,6 +22,8 @@
 
 class Server;
 class Query;
+class NicksOnlineFilterModel;
+class NickListModel;
 class QDateTime;
 
 class InputFilter : public QObject
@@ -68,6 +70,7 @@ class InputFilter : public QObject
                                                   // will be connected to Server::setTopicAuthor()
         void topicAuthor(const QString& channel, const QString& author, QDateTime t);
         void endOfWho(const QString& target);
+        void endOfWhois(int cId, const QString& nick);
         void endOfNames(const QString& target);
         void addChannelListPanel();
         void addToChannelList(const QString& channel,int users,const QString& topic);
@@ -94,5 +97,12 @@ class InputFilter : public QObject
 
         /// Used when handling MOTD
         bool m_connecting;
+
+    private:
+        NickListModel* m_nickListModel;
+        NicksOnlineFilterModel* m_nicksOnlineModel;
+        int m_connectionId;
+        int m_serverGroupId;
+
 };
 #endif

@@ -76,7 +76,6 @@ class Channel : public ChatWindow
 
         virtual void append(const QString& nickname,const QString& message);
         virtual void appendAction(const QString& nickname,const QString& message);
-        void nickActive(const QString& nickname);
         #ifdef HAVE_QCA2
         Konversation::Cipher* getCipher();
         #endif
@@ -127,12 +126,11 @@ class Channel : public ChatWindow
 
 //Nicklist
     public:
-        void joinNickname(const QString& nickname);
-        void removeNick(const QString& nickname, const QString &reason, bool quit);
+        void joinNickname(const QString& nickname, const QString& hostmask);
+        void removeNick(const QString& nickname, const QString& hostmask, const QString &reason, bool quit);
         void kickNick(const QString& nickname, const QString &kicker, const QString &reason);
         void nickRenamed(const QString &oldNick, const QString& nickname);
         void endOfNames();
-        Nick2* getNickByName(const QString& nickname) const;
 
         virtual void emitUpdateInfo();
 
@@ -231,6 +229,10 @@ class Channel : public ChatWindow
         void setAutoJoin(bool autojoin);
 
         void connectionStateChanged(Server*, Konversation::ConnectionState);
+
+        bool isNickInChannel(const QString& nick) const;
+        bool isNickAnyTypeOfOp(const QString& nick) const;
+        uint getNickTimestamp(const QString& nick) const;
 
     protected slots:
         void quickButtonClicked(const QString& definition);

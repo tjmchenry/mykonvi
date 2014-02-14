@@ -57,7 +57,6 @@ class Nick2 : public QObject
 
         bool setMode(const QString& channel, char mode, bool state);
         bool setMode(const QString& channel, bool admin, bool owner, bool op, bool halfop, bool voice);
-        bool setMode(const QString& channel, int mode); //TODO FIXME get rid of this
 
         int getStatusValue(const QString& channel) const;
         QPixmap getIcon(const QString& channel) const;
@@ -83,12 +82,19 @@ class Nick2 : public QObject
         void setOnlineSince(const QDateTime& time);
         QString getPrettyOnlineSince() const;
 
+        QString getPrettyInfo() const;
+
         bool getPrintedOnline() const;
         void setPrintedOnline(bool printed);
 
         uint getNickColor();
+
         bool isIdentified() const;
         void setIdentified(bool identified);
+
+        bool isSecureConnection() const;
+        void setSecureConnection(bool secure);
+
         uint getTimestamp(const QString& channel) const;
         void setTimestamp(const QString& channel, uint timestamp);
 
@@ -105,10 +111,12 @@ class Nick2 : public QObject
     signals:
         void channelPropertiesChanged(const QString& channel);
         void nickChanged(const QString& nick);
+        void prettyInfoChanged();
 
     public slots:
         void updateTooltips(const QString& channel);
         void updateStatusValue(const QString& channel);
+        void updatePrettyInfo();
 
     private:
         void startNickInfoChangedTimer();
@@ -126,9 +134,11 @@ class Nick2 : public QObject
         QDateTime m_onlineSince;
         int m_connectionId;
         bool m_identified;
+        bool m_secureConnection;
         bool m_printedOnline;
         int m_nickColor;
         bool m_away;
         QString m_awayMessage;
+        QString m_prettyInfo;
 };
 #endif

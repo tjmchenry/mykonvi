@@ -738,9 +738,9 @@ bool Channel::shouldShowEvent(const QString& nickname)
 {
     if (Preferences::self()->hideUnimportantEvents())
     {
-        Nick2* nick = m_channelNickListModel->getNick(nickname);
+        uint timestamp = getNickTimestamp(nickname);
 
-        if (nick && Preferences::self()->hideUnimportantEventsExcludeActive())
+        if (Preferences::self()->hideUnimportantEventsExcludeActive())
         {
             uint activityThreshold = 3600;
 
@@ -755,7 +755,7 @@ bool Channel::shouldShowEvent(const QString& nickname)
 
             if (m_server->isWatchedNick(nickname))
                 return true; // nick is on our watched list, so we probably want to see the event
-            else if (nick->getTimestamp(getName())+activityThreshold > QDateTime::currentDateTime().toTime_t())
+            else if (timestamp+activityThreshold > QDateTime::currentDateTime().toTime_t())
                 return true; // the nick has spoken within activity threshold
             else
                 return false;
@@ -790,15 +790,9 @@ void Channel::nickRenamed(const QString &oldNick, const QString& newNick)
     }
 }
 
-void Channel::joinNickname(const QString& nickname)
+void Channel::joinNickname(const QString& nickname, const QString& hostmask)
 {
     bool displayCommandMessage = shouldShowEvent(nickname);
-
-    Nick2* nick = m_channelNickListModel->getNick(nickname);
-    QString hostmask = QString();
-
-    if (nick)
-        hostmask = nick->getHostmask();
 
     if(nickname == m_server->getNickname())
     {
@@ -835,7 +829,7 @@ void Channel::joinNickname(const QString& nickname)
     }
 }
 
-void Channel::removeNick(const QString& nickname, const QString& reason, bool quit)
+void Channel::removeNick(const QString& nickname, const QString& hostmask, const QString& reason, bool quit)
 {
     bool displayCommandMessage = shouldShowEvent(nickname);
 
@@ -848,13 +842,6 @@ void Channel::removeNick(const QString& nickname, const QString& reason, bool qu
             displayReason += "\017";
     }
 
-    QString hostmask = QString();
-
-    Nick2* nick = getNickByName(nickname);
-
-    if (nick)
-        hostmask = nick->getHostmask();
-
     if(nickname == m_server->getNickname())
     {
         if (displayCommandMessage)
@@ -866,7 +853,7 @@ void Channel::removeNick(const QString& nickname, const QString& reason, bool qu
                     appendCommandMessage(i18nc("Message type", "Quit"), i18n("You (%1) have left this server.", hostmask));
                 else
                     appendCommandMessage(i18nc("Message type", "Quit"), i18nc("%1 = our hostmask, %2 = reason", "You (%1) have left this server (%2).",
-                        nick->getHostmask(), displayReason), false);
+                        hostmask, displayReason), false);
             }
             else
             {
@@ -979,11 +966,6 @@ void Channel::kickNick(const QString& nickname, const QString& kicker, const QSt
     }
 }
 
-Nick2* Channel::getNickByName(const QString& nickname) const
-{
-    return m_channelNickListModel->getNick(nickname);
-}
-
 void Channel::emitUpdateInfo()
 {
     //TODO find another way to get this count
@@ -1050,7 +1032,6 @@ void Channel::setTopicAuthor(const QString& author, QDateTime time)
 void Channel::updateMode(const QString& sourceNick, char mode, bool plus, const QString &parameter)
 {
     QString message;
-    Nick2* parameterNick = m_channelNickListModel->getNick(parameter);
 
     bool fromMe = false;
     bool toMe = false;
@@ -1107,11 +1088,8 @@ void Channel::updateMode(const QString& sourceNick, char mode, bool plus, const 
                         else        message = i18n("%1 takes channel owner privileges from %2.", sourceNick, parameter);
                     }
                 }
-                if (parameterNick)
-                {
-                    parameterNick->setOwner(getName(), plus);
-                    emitUpdateInfo();
-                }
+
+                emitUpdateInfo();
             }
             break;
 
@@ -1142,11 +1120,9 @@ void Channel::updateMode(const QString& sourceNick, char mode, bool plus, const 
                     else        message = i18n("%1 takes channel admin privileges from %2.", sourceNick, parameter);
                 }
             }
-            if (parameterNick)
-            {
-                parameterNick->setAdmin(getName(), plus);
-                emitUpdateInfo();
-            }
+
+            emitUpdateInfo();
+
             break;
 
         case 'o':
@@ -1176,11 +1152,9 @@ void Channel::updateMode(const QString& sourceNick, char mode, bool plus, const 
                     else        message = i18n("%1 takes channel operator privileges from %2.", sourceNick, parameter);
                 }
             }
-            if (parameterNick)
-            {
-                parameterNick->setOp(getName(), plus);
-                emitUpdateInfo();
-            }
+
+            emitUpdateInfo();
+
             break;
 
         case 'h':
@@ -1210,11 +1184,9 @@ void Channel::updateMode(const QString& sourceNick, char mode, bool plus, const 
                     else        message = i18n("%1 takes channel halfop privileges from %2.", sourceNick, parameter);
                 }
             }
-            if (parameterNick)
-            {
-                parameterNick->setHalfOp(getName(), plus);
-                emitUpdateInfo();
-            }
+
+            emitUpdateInfo();
+
             break;
 
         //case 'O': break;
@@ -1246,10 +1218,7 @@ void Channel::updateMode(const QString& sourceNick, char mode, bool plus, const 
                     else        message = i18n("%1 takes the permission to talk from %2.", sourceNick, parameter);
                 }
             }
-            if (parameterNick)
-            {
-                parameterNick->setVoice(getName(), plus);
-            }
+
             break;
 
         case 'c':
@@ -1787,12 +1756,37 @@ void Channel::childAdjustFocus()
     refreshModeButtons();
 }
 
+bool Channel::isNickInChannel(const QString& nick) const
+{
+    if (m_channelNickListModel)
+        return m_channelNickListModel->isNickInChannel(nick);
+
+    return false;
+}
+
+bool Channel::isNickAnyTypeOfOp(const QString& nick) const
+{
+    if (m_channelNickListModel)
+        return m_channelNickListModel->isNickAnyTypeOfOp(nick);
+
+    return false;
+}
+
+uint Channel::getNickTimestamp(const QString& nick) const
+{
+    if (m_channelNickListModel)
+        return m_channelNickListModel->getNickTimestamp(nick);
+
+    return 0;
+}
+
 void Channel::refreshModeButtons()
 {
     QString nick = m_server->getNickname();
     bool enable = true;
-    if (m_channelNickListModel && m_channelNickListModel->isNickInChannel(nick))
-        enable = m_channelNickListModel->isNickAnyTypeOfOp(nick);
+
+    if (isNickInChannel(nick))
+        enable = isNickAnyTypeOfOp(nick);
 
     // if not channel nick, then enable is true - fall back to assuming they are op
 
@@ -1977,7 +1971,8 @@ void Channel::updateAutoWho()
 
 void Channel::fadeActivity()
 {
-    m_channelNickListModel->setAllNicksLessActive();
+    if (m_channelNickListModel)
+        m_channelNickListModel->setAllNicksLessActive();
 }
 
 bool Channel::canBeFrontView()
@@ -2171,36 +2166,12 @@ void Channel::clearBanList()
 
 void Channel::append(const QString& nickname, const QString& message)
 {
-    if(nickname != getServer()->getNickname())
-    {
-        Nick2* nick = m_channelNickListModel->getNick(nickname);
-
-        if(nick) {
-            nick->setTimestamp(getName(), QDateTime::currentDateTime().toTime_t());
-        }
-    }
-
     ChatWindow::append(nickname, message);
-    nickActive(nickname);
 }
 
 void Channel::appendAction(const QString& nickname, const QString& message)
 {
-    if(nickname != getServer()->getNickname()) {
-        Nick2* nick = m_server->nickListModel2()->getNick(m_server->connectionId(), nickname);
-
-        if(nick) {
-            nick->setTimestamp(getName(), QDateTime::currentDateTime().toTime_t());
-        }
-    }
-
     ChatWindow::appendAction(nickname, message);
-    nickActive(nickname);
-}
-
-void Channel::nickActive(const QString& nickname)
-{
-    m_server->nickListModel2()->setNickMoreActive(m_server->connectionId(), getName(), nickname);
 }
 
 #ifdef HAVE_QCA2

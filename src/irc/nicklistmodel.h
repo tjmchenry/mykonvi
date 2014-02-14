@@ -71,6 +71,8 @@ class NickListModel : public QAbstractListModel
         bool isNickOnline(int connectionId, const QString& nick) const;
         bool isNotifyNick(int cId, const QString& nick) const;
         bool isNickIdentified(int connectionId, const QString& nick) const;
+        bool getNickSecureConnection(int connectionId, const QString& nick) const;
+        void setNickSecureConnection(int connectionId, const QString& nick, bool secure);
         QStringList getNickChannels(int connectionId, const QString& nick) const;
         bool isNickInChannel(int connectionId, const QString& channel, const QString& nick) const;
         bool isNickAnyTypeOfOp(int connectionId, const QString& channel, const QString& nick) const;
@@ -85,9 +87,9 @@ class NickListModel : public QAbstractListModel
         void setNickMoreActive(int connectionId, const QString& channel, const QString& nick);
         void setAllChannelNicksLessActive(int connectionId, const QString& channel);
         uint getNickTimestamp(int connectionId, const QString& channel, const QString& nick) const;
+        void setNickTimestamp(int connectionId, const QString& channel, const QString& nick, uint timestamp);
         uint getNickStatusValue(int connectionId, const QString& channel, const QString& nick) const;
 
-        void setNickMode(int connectionId, const QString& channel, const QString& nick, unsigned int mode);
         void setNickMode(int connectionId, const QString& channel, const QString& nick, char mode, bool state);
         void setNickAway(int connectionId, const QString& nick, bool away, const QString& awayMessage = QString());
         void setNickIdentified(int connectionId, const QString& nick, bool identified);
@@ -125,6 +127,7 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
         QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
 
         bool isNickInChannel(const QString& nick) const;
+        uint getNickTimestamp(const QString& nick) const;
 
         void insertNick(Nick2* item);
         void removeNick(const QString& nick);
@@ -141,7 +144,6 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
         bool nickActivityLessThan(const Nick2* left, const Nick2* right) const;
 
         bool isNickAnyTypeOfOp(const QString& nick) const;
-        Nick2* getNick(const QString& nick) const;
 
     public slots:
         void nickCompletion(IRCInput* inputBar);

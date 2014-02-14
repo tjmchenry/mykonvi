@@ -199,7 +199,6 @@ void NickListModel::removeNick(int connectionId, const QString& nick)
         else
             delete nickObject;
 
-
     }
 }
 
@@ -665,6 +664,22 @@ uint NickListModel::getNickTimestamp(int connectionId, const QString& channel, c
     return 0;
 }
 
+void NickListModel::setNickTimestamp(int connectionId, const QString& channel, const QString& nick, uint timestamp)
+{
+    QString lcNick = nick.toLower();
+
+    if (isNickOnline(connectionId, nick))
+    {
+        m_nickHashes[connectionId][lcNick]->setTimestamp(channel, timestamp);
+
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][lcNick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
+    }
+}
+
 //status
 uint NickListModel::getNickStatusValue(int connectionId, const QString& channel, const QString& nick) const
 {
@@ -672,22 +687,6 @@ uint NickListModel::getNickStatusValue(int connectionId, const QString& channel,
         return m_nickHashes[connectionId][nick.toLower()]->getStatusValue(channel);
 
     return 0;
-}
-
-void NickListModel::setNickMode(int connectionId, const QString& channel, const QString& nick, unsigned int mode)
-{
-    QString lcNick = nick.toLower();
-
-    if (isNickOnline(connectionId, nick))
-    {
-        m_nickHashes[connectionId][lcNick]->setMode(channel, mode);
-
-        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][lcNick]);
-        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
-
-        //TODO when we can dep Qt 5 we can specify what roles have changed.
-        emit dataChanged(index, index); //, QVector<int>() << Qt::DecorationRole);
-    }
 }
 
 void NickListModel::setNickMode(int connectionId, const QString& channel, const QString& nick, char mode, bool state)
@@ -736,6 +735,32 @@ void NickListModel::setNickIdentified(int connectionId, const QString& nick, boo
         //TODO when we can dep Qt 5 we can specify what roles have changed.
         emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
     }
+}
+
+void NickListModel::setNickSecureConnection(int connectionId, const QString& nick, bool secure)
+{
+    QString lcNick = nick.toLower();
+
+    if (isNickOnline(connectionId, nick))
+    {
+        m_nickHashes[connectionId][lcNick]->setSecureConnection(secure);
+
+        uint position = m_nickLists[connectionId].indexOf(m_nickHashes[connectionId][lcNick]);
+        QModelIndex index = NickListModel::index(position, 0, m_servers[connectionId]);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::ToolTipRole);
+    }
+}
+
+bool NickListModel::getNickSecureConnection(int connectionId, const QString& nick) const
+{
+    QString lcNick = nick.toLower();
+
+    if (isNickOnline(connectionId, nick))
+        return m_nickHashes[connectionId][lcNick]->isSecureConnection();
+
+    return false;
 }
 
 struct timestampLessThanSort
@@ -834,13 +859,13 @@ QVariant ChannelNickListFilterModel::data(const QModelIndex& index, int role) co
     return sourceModel()->data(mapToSource(index), role);
 }
 
-Nick2* ChannelNickListFilterModel::getNick(const QString& nick) const
+uint ChannelNickListFilterModel::getNickTimestamp(const QString& nick) const
 {
     if (sourceNickModel())
-        return sourceNickModel()->getNick(m_connectionId, nick);
+        return sourceNickModel()->getNickTimestamp(m_connectionId, m_channelName, nick);
 
     else
-        return NULL;
+        return 0;
 }
 
 bool ChannelNickListFilterModel::isNickInChannel(const QString& nick) const

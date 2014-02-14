@@ -47,6 +47,7 @@ NicksOnlineFilterModel::NicksOnlineFilterModel(QObject* parent) : QSortFilterPro
     //TODO get these signals from input filter instead
     connect(m_nickListModel, SIGNAL(nickOnline(int, int, QString)), this, SLOT(nickOnline(int, int, QString)));
     connect(m_nickListModel, SIGNAL(nickOffline(int, int, Nick2*)), this, SLOT(nickOffline(int, int, Nick2*)));
+    connect(this, SIGNAL(requestWhois(int, const QString&)), this, SLOT(slotRequestWhois(int, const QString&)));
 }
 
 NicksOnlineFilterModel::~NicksOnlineFilterModel()
@@ -167,35 +168,10 @@ QVariant NicksOnlineFilterModel::data(const QModelIndex& index, int role) const
                         case 0:
                             return nick->getBestPersonName(); //TODO special cases for what to display here
                         case 1:
-                            if (nick->isAway())
-                            {
-                                info += i18n("Away");
-                                if (!nick->getAwayMessage().isEmpty())
-                                    info += " (" + nick->getAwayMessage() + ')';
-                            }
-
-                            if (!nick->getHostmask().isEmpty())
-                                info += ' ' + nick->getHostmask();
-
-                            if (!nick->getRealName().isEmpty())
-                                info += " (" + nick->getRealName() + ')';
-
-                            if (!nick->getNetServer().isEmpty())
-                            {
-                                info += i18n( " online via %1", nick->getNetServer() );
-                                if (!nick->getNetServerInfo().isEmpty())
-                                    info += " (" + nick->getNetServerInfo() + ')';
-                            }
-
-                            if (!nick->getOnlineSince().isNull())
-                                info += i18n(" since %1", nick->getPrettyOnlineSince());
-
-                            if (info.isEmpty())
-                                info = QStringList(serverNames.values()).join(", ");
-
-                            //TODO run a whois if this is empty...
-
-                            return info;
+                            if (!nick->getPrettyInfo().isEmpty())
+                                return nick->getPrettyInfo();
+                            else
+                                return QStringList(serverNames.values()).join(", ");
                         default:
                             return QVariant();
                     }
@@ -310,6 +286,24 @@ bool NicksOnlineFilterModel::filterAcceptsRow(int row, const QModelIndex& parent
     return true;
 }
 
+void NicksOnlineFilterModel::slotRequestWhois(int cId, const QString& nick)
+{
+    Server* server = m_connectionManager->getServerByConnectionId(cId);
+
+    if (server && !m_whoisRequested.contains(cId, nick))
+    {
+        m_whoisRequested.insert(cId, nick);
+
+        server->requestWhois(nick);
+    }
+}
+
+void NicksOnlineFilterModel::whoisReceived(int cId, const QString& nick)
+{
+    if (m_whoisRequested.contains(cId, nick))
+            m_whoisRequested.remove(cId, nick);
+}
+
 void NicksOnlineFilterModel::notifyResponse(int cId, const QString& newIson)
 {
     QStringList newIsonList = newIson.split(' ', QString::SkipEmptyParts);
@@ -378,6 +372,10 @@ void NicksOnlineFilterModel::nickOnline(int sgId, int cId, const QString& nick)
             QModelIndex parent = NicksOnlineFilterModel::index(Preferences::serverGroupList().indexOf(Preferences::serverGroupById(sgId)), m_column, QModelIndex());
             QModelIndex firstIndex = NicksOnlineFilterModel::index(notifyList.indexOf(pattern), 0, parent);
             QModelIndex lastIndex = firstIndex.sibling(firstIndex.row(), 1);
+
+            if ((m_nickListModel->isNickOnline(cId, nick) && m_nickListModel->getNick(cId, nick)->getPrettyInfo().isEmpty()) ||
+                (isWatchedNickOnline(sgId, cId, nick) && getWatchedNick(sgId, cId, nick)->getPrettyInfo().isEmpty()))
+                emit requestWhois(cId, nick);
 
             //TODO when we can dep Qt 5 we can specify what roles have changed.
             emit dataChanged(firstIndex, lastIndex); //, QVector<int>() << Qt::DisplayRole);
@@ -780,6 +778,140 @@ void NicksOnlineFilterModel::updateNotifyConnection(int sgId, int cId)
     {
         m_watchedNicks.remove(sgId);
     }
+}
+
+void NicksOnlineFilterModel::setNickAway(int sgId, int cId, const QString& nick, bool away, const QString& awayMessage)
+{
+    if (isWatchedNickOnline(sgId, cId, nick))
+    {
+        getWatchedNick(sgId, cId, nick)->setAway(away, awayMessage);
+
+        QModelIndex index = getNotifyNickIndex(sgId, nick);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole << Qt::ToolTipRole);
+    }
+}
+
+void NicksOnlineFilterModel::setNickHostmask(int sgId, int cId, const QString& nick, const QString& hostmask)
+{
+    if (!hostmask.isEmpty() && isWatchedNickOnline(sgId, cId, nick))
+    {
+        getWatchedNick(sgId, cId, nick)->setHostmask(hostmask);
+
+        QModelIndex index = getNotifyNickIndex(sgId, nick);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole << Qt::ToolTipRole);
+    }
+}
+
+void NicksOnlineFilterModel::setNickIdentified(int sgId, int cId, const QString& nick, bool identified)
+{
+    if (isWatchedNickOnline(sgId, cId, nick))
+    {
+        getWatchedNick(sgId, cId, nick)->setIdentified(identified);
+
+        QModelIndex index = getNotifyNickIndex(sgId, nick);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole << Qt::ToolTipRole);
+    }
+}
+
+// Need channel modes because whois can tell us what mode they have in a channel if the nick does not have +i
+void NicksOnlineFilterModel::setNickMode(int sgId, int cId, const QString& channel, const QString& nick, char mode, bool state)
+{
+    if (isWatchedNickOnline(sgId, cId, nick))
+    {
+        getWatchedNick(sgId, cId, nick)->setMode(channel, mode, state);
+
+        QModelIndex index = getNotifyNickIndex(sgId, nick);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole << Qt::ToolTipRole);
+    }
+}
+
+void NicksOnlineFilterModel::setNickNetServer(int sgId, int cId, const QString& nick, const QString& netServer)
+{
+    if (!netServer.isEmpty() && isWatchedNickOnline(sgId, cId, nick))
+    {
+        getWatchedNick(sgId, cId, nick)->setNetServer(netServer);
+
+        QModelIndex index = getNotifyNickIndex(sgId, nick);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole << Qt::ToolTipRole);
+    }
+}
+
+void NicksOnlineFilterModel::setNickNetServerInfo(int sgId, int cId, const QString& nick, const QString& netServerInfo)
+{
+    if (!netServerInfo.isEmpty() && isWatchedNickOnline(sgId, cId, nick))
+    {
+        getWatchedNick(sgId, cId, nick)->setNetServerInfo(netServerInfo);
+
+        QModelIndex index = getNotifyNickIndex(sgId, nick);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole << Qt::ToolTipRole);
+    }
+}
+
+void NicksOnlineFilterModel::setNickOnlineSince(int sgId, int cId, const QString& nick, const QDateTime& onlineSince)
+{
+    if (!onlineSince.isNull() && isWatchedNickOnline(sgId, cId, nick))
+    {
+        getWatchedNick(sgId, cId, nick)->setOnlineSince(onlineSince);
+
+        QModelIndex index = getNotifyNickIndex(sgId, nick);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole << Qt::ToolTipRole);
+    }
+}
+
+void NicksOnlineFilterModel::setNickRealName(int sgId, int cId, const QString& nick, const QString& realName)
+{
+    QString lcNick = nick.toLower();
+
+    if (!realName.isEmpty() && isWatchedNickOnline(sgId, cId, nick))
+    {
+        getWatchedNick(sgId, cId, nick)->setRealName(realName);
+
+        QModelIndex index = getNotifyNickIndex(sgId, nick);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole);
+    }
+}
+
+void NicksOnlineFilterModel::setNickSecureConnection(int sgId, int cId, const QString& nick, bool secure)
+{
+    if (isWatchedNickOnline(sgId, cId, nick))
+    {
+        getWatchedNick(sgId, cId, nick)->setSecureConnection(secure);
+
+        QModelIndex index = getNotifyNickIndex(sgId, nick);
+
+        //TODO when we can dep Qt 5 we can specify what roles have changed.
+        emit dataChanged(index, index); //, QVector<int>() << Qt::DisplayRole << Qt::ToolTipRole);
+    }
+}
+
+QModelIndex NicksOnlineFilterModel::getNotifyNickIndex(int sgId, const QString& nick) const
+{
+    int position = Preferences::serverGroupModel()->getServerGroupIndexById(sgId);
+    QModelIndex srcParent = sourceModel()->index(position, 0);
+
+    QRegExp nickPattern(nick);
+    nickPattern.setCaseSensitivity(Qt::CaseInsensitive);
+
+    position = Preferences::notifyListByGroupId(sgId).indexOf(nickPattern);
+    QModelIndex srcIndex = sourceModel()->index(position, 1, srcParent);
+
+    return mapFromSource(srcIndex);
 }
 
 NicksOnline::NicksOnline(QWidget* parent) : ChatWindow(parent)

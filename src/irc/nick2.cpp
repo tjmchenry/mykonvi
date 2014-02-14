@@ -26,6 +26,7 @@ Nick2::Nick2(int connectionId, const QString& nick) : QObject()
     m_away = false;
     m_identified = false;
     m_printedOnline = false;
+    m_secureConnection = false;
 
     //TODO tell kpeople the nick is here
 
@@ -36,6 +37,7 @@ Nick2::Nick2(int connectionId, const QString& nick) : QObject()
 
     connect(this, SIGNAL(channelPropertiesChanged(const QString&)), this, SLOT(updateStatusValue(const QString&)));
     connect(this, SIGNAL(channelPropertiesChanged(const QString&)), this, SLOT(updateTooltips(const QString&)));
+    connect(this, SIGNAL(prettyInfoChanged()), this, SLOT(updatePrettyInfo()));
 }
 
 Nick2::Nick2(const Nick2&)
@@ -95,6 +97,7 @@ bool Nick2::isOwner(const QString& channel) const
     {
         return m_channelHash[channel]->value("modes").value<Modes*>()->value('q');
     }
+
     return false;
 }
 
@@ -156,23 +159,6 @@ bool Nick2::setMode(const QString& channel, char mode, bool state)
             kDebug() << "Mode '" << mode << "' not recognised in setModeForNick";
             return false;
     }
-}
-
-/** Used still for passing modes from inputfilter to Server.  Should be removed.
- */
-bool Nick2::setMode(const QString& channel, int mode)
-{
-    bool voice = mode%2;
-    mode >>= 1;
-    bool halfop = mode %2;
-    mode >>= 1;
-    bool op = mode %2;
-    mode >>= 1;
-    bool owner = mode %2;
-    mode >>= 1;
-    bool admin = mode %2;
-
-    return setMode(channel, admin, owner, op, halfop, voice);
 }
 
 bool Nick2::setMode(const QString& channel, bool admin, bool owner, bool op, bool halfop, bool voice)
@@ -353,6 +339,7 @@ void Nick2::setHostmask(const QString& newMask)
 
     emit channelPropertiesChanged(QString());
     emit nickChanged(getNickname());
+    emit prettyInfoChanged();
 }
 
 QString Nick2::getChannelTooltip(const QString& channel) const
@@ -527,9 +514,54 @@ bool Nick2::isIdentified() const
     return m_identified;
 }
 
+bool Nick2::isSecureConnection() const
+{
+    return m_secureConnection;
+}
+
+void Nick2::setSecureConnection(bool secure)
+{
+    m_secureConnection = secure;
+}
+
 QString Nick2::getPrettyOnlineSince() const
 {
     return KGlobal::locale()->formatDateTime(m_onlineSince, KLocale::FancyLongDate, false);
+}
+
+QString Nick2::getPrettyInfo() const
+{
+    return m_prettyInfo;
+}
+
+void Nick2::updatePrettyInfo()
+{
+    QString info = QString();
+
+    if (isAway())
+    {
+        info += i18n("Away");
+        if (!getAwayMessage().isEmpty())
+            info += " (" + getAwayMessage() + ')';
+    }
+
+    if (!getHostmask().isEmpty())
+        info += ' ' + getHostmask();
+
+    if (!getRealName().isEmpty())
+        info += " (" + getRealName() + ')';
+
+    if (!getNetServer().isEmpty())
+    {
+        info += i18n( " online via %1", getNetServer() );
+        if (!getNetServerInfo().isEmpty())
+            info += " (" + getNetServerInfo() + ')';
+    }
+
+    if (!getOnlineSince().isNull())
+        info += i18n(" since %1", getPrettyOnlineSince());
+
+    m_prettyInfo = info;
 }
 
 int Nick2::getConnectionId() const
@@ -565,6 +597,7 @@ void Nick2::setAway(bool state, const QString& awayMessage)
 
     emit channelPropertiesChanged(QString());
     emit nickChanged(getNickname());
+    emit prettyInfoChanged();
 
     //TODO tell kpeople
 }
@@ -585,6 +618,7 @@ void Nick2::setAwayMessage(const QString& newMessage)
 
     emit channelPropertiesChanged(QString());
     emit nickChanged(getNickname());
+    emit prettyInfoChanged();
 }
 
 void Nick2::setRealName(const QString& newRealName)
@@ -594,6 +628,7 @@ void Nick2::setRealName(const QString& newRealName)
 
     emit channelPropertiesChanged(QString());
     emit nickChanged(getNickname());
+    emit prettyInfoChanged();
 }
 
 void Nick2::setNetServer(const QString& newNetServer)
@@ -603,6 +638,7 @@ void Nick2::setNetServer(const QString& newNetServer)
 
     emit channelPropertiesChanged(QString());
     emit nickChanged(getNickname());
+    emit prettyInfoChanged();
 }
 
 void Nick2::setNetServerInfo(const QString& newNetServerInfo)
@@ -612,6 +648,7 @@ void Nick2::setNetServerInfo(const QString& newNetServerInfo)
 
     emit channelPropertiesChanged(QString());
     emit nickChanged(getNickname());
+    emit prettyInfoChanged();
 }
 
 void Nick2::setOnlineSince(const QDateTime& datetime)
@@ -621,6 +658,7 @@ void Nick2::setOnlineSince(const QDateTime& datetime)
 
     emit channelPropertiesChanged(QString());
     emit nickChanged(getNickname());
+    emit prettyInfoChanged();
 }
 
 QString Nick2::getBestPersonName() const

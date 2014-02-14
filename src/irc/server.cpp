@@ -1542,25 +1542,11 @@ void Server::ctcpReply(const QString &receiver,const QString &text)
     queue("NOTICE "+receiver+" :"+'\x01'+text+'\x01');
 }
 
-// Returns pointer to the ChannelNick (mode and pointer to NickInfo) for a given channel and nickname.
+// Returns pointer to the Nick for a given channel and nickname.
 // 0 if not found.
 Nick2* Server::getNick(const QString& nickname)
 {
     return nickListModel2()->getNick(connectionId(), nickname);
-}
-
-// Updates a nickname in a channel.  If not on the joined or unjoined lists, and nick
-// is in the watch list, adds the channel and nick to the unjoinedChannels list.
-// If mode != 99, sets the mode for the nick in the channel.
-// Returns the NickInfo object if nick is on any lists, otherwise 0.
-void Server::setChannelNick(const QString& channelName, const QString& nickname, unsigned int mode)
-{
-    m_nickListModel2->addNickToChannel(m_connectionId, channelName, nickname);
-
-    //TODO why 99?
-    if(mode != 99)
-        m_nickListModel2->setNickMode(m_connectionId, channelName, nickname, mode);
-
 }
 
 // Returns a list of all the shared channels
@@ -1673,7 +1659,7 @@ void Server::requestChannelList()
 void Server::requestWhois(const QString& nickname)
 {
     m_inputFilter.setAutomaticRequest("WHOIS", nickname, true);
-    queue("WHOIS "+nickname, LowPriority);
+    queue("WHOIS " + nickname + ' ' + nickname, LowPriority);
 }
 
 void Server::requestWho(const QString& channel)
@@ -1705,43 +1691,40 @@ void Server::resolveUserhost(const QString& nickname)
 
 void Server::requestBan(const QStringList& users,const QString& channel,const QString& a_option)
 {
-    QString hostmask;
-    QString option=a_option.toLower();
+    QString option = a_option.toLower();
 
-    Channel* targetChannel=getChannelByName(channel);
-
-    for(int index=0;index<users.count();index++)
+    for (int index = 0; index < users.count(); index++)
     {
         // first, set the ban mask to the specified nick
-        QString mask=users[index];
+        QString mask = users[index];
         // did we specify an option?
-        if(!option.isEmpty())
+        if (!option.isEmpty())
         {
             // try to find specified nick on the channel
-            Nick2* targetNick = targetChannel->getNickByName(mask);
-            // if we found the nick try to find their hostmask
-            if(targetNick)
+            if (isNickOnline(mask))
             {
-                QString hostmask = targetNick->getHostmask();
+                // if we found the nick try to find their hostmask
+                QString hostmask = getNickHostmask(mask);
+
                 // if we found the hostmask, add it to the ban mask
-                if(!hostmask.isEmpty())
+                if (!hostmask.isEmpty())
                 {
-                    mask = targetNick->getNickname()+'!'+hostmask;
+                    mask += '!'+hostmask;
 
                     // adapt ban mask to the option given
-                    if(option=="host")
-                        mask="*!*@*."+hostmask.section('.',1);
-                    else if(option=="domain")
-                        mask="*!*@"+hostmask.section('@',1);
-                    else if(option=="userhost")
-                        mask="*!"+hostmask.section('@',0,0)+"@*."+hostmask.section('.',1);
-                    else if(option=="userdomain")
-                        mask="*!"+hostmask.section('@',0,0)+'@'+hostmask.section('@',1);
+                    if (option == "host")
+                        mask = "*!*@*." + hostmask.section('.',1);
+                    else if (option == "domain")
+                        mask = "*!*@" + hostmask.section('@',1);
+                    else if (option == "userhost")
+                        mask = "*!" + hostmask.section('@',0,0)+"@*." + hostmask.section('.',1);
+                    else if (option == "userdomain")
+                        mask = "*!" + hostmask.section('@',0,0)+'@' + hostmask.section('@',1);
                 }
             }
         }
 
-        Konversation::OutputFilterResult result = getOutputFilter()->execBan(mask,channel);
+        Konversation::OutputFilterResult result = getOutputFilter()->execBan(mask, channel);
         queue(result.toServer);
     }
 }
@@ -2473,7 +2456,7 @@ Channel* Server::joinChannel(const QString& name, const QString& hostmask)
 
     addHostmaskToNick(getNickname(), hostmask);
 
-    channel->joinNickname(getNickname());
+    channel->joinNickname(getNickname(), hostmask);
 
     return channel;
 }
@@ -2496,18 +2479,19 @@ void Server::removeChannel(Channel* channel)
 
 void Server::updateChannelMode(const QString &updater, const QString &channelName, char mode, bool plus, const QString &parameter)
 {
-
     Channel* channel=getChannelByName(channelName);
 
     if(channel)                                   //Let the channel be verbose to the screen about the change, and update channelNick
         channel->updateMode(updater, mode, plus, parameter);
+
     // TODO: What is mode character for owner?
     // Answer from JOHNFLUX - I think that admin is the same as owner.  Channel.h has owner as "a"
     // "q" is the likely answer.. UnrealIRCd and euIRCd use it.
     // TODO these need to become dynamic
     QString userModes="vhoqa";                    // voice halfop op owner admin
     int modePos = userModes.indexOf(mode);
-    if (modePos > 0)
+
+    if (modePos >= 0)
     {
         m_nickListModel2->setNickMode(m_connectionId, channelName, parameter, mode, plus);
     }
@@ -2603,7 +2587,7 @@ Channel* Server::nickJoinsChannel(const QString &channelName, const QString &nic
     {
         addHostmaskToNick(nickname, hostmask);
 
-        outChannel->joinNickname(nickname);
+        outChannel->joinNickname(nickname, hostmask);
     }
 
     return outChannel;
@@ -2625,14 +2609,8 @@ Channel* Server::removeNickFromChannel(const QString &channelName, const QString
 
     if(outChannel)
     {
-        outChannel->removeNick(nickname, reason, quit);
+        outChannel->removeNick(nickname, getNickHostmask(nickname), reason, quit);
     }
-
-    // If not listed in any channel, and not on query list, delete the NickInfo,
-    // but only if not on the notify list.  ISON replies will take care of deleting
-    // the NickInfo, if on the notify list.
-
-    m_nickListModel2->removeNickFromChannel(m_connectionId, channelName, nickname);
 
     return outChannel;
 }
@@ -2661,8 +2639,6 @@ void Server::removeNickFromServer(const QString &nickname,const QString &reason)
 
 void Server::renameNick(const QString &nickname, const QString &newNick)
 {
-    m_nickListModel2->setNewNickname(m_connectionId, nickname, newNick);
-
     if(nickname.isEmpty() || newNick.isEmpty())
     {
         kDebug() << "called with empty strings!  Trying to rename '" << nickname << "' to '" << newNick << "'";

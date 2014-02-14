@@ -250,16 +250,6 @@ class Server : public QObject
          *  @return            A list of channels the nick is in that we're also in.  Empty if none.
          */
         Nick2* getNick(const QString& nickname);
-        /** Updates a nickname in a channel.  If not on the joined or unjoined lists, and nick
-         *  is in the watch list, adds the channel and nick to the unjoinedChannels list.
-         *  If mode != 99, sets the mode for the nick in the channel.
-         *  Returns the NickInfo object if nick is on any lists, otherwise 0.
-         *  @param channelName The channel name.  Case sensitive.
-         *  @param nickname    The nickname.  Case sensitive.
-         *  @param mode        Bit mask containing the modes the nick has in the channel,
-         *                     or 99 if not known.  See channelnick.cpp for bit definitions.
-         */
-        void setChannelNick(const QString& channelName, const QString& nickname, unsigned int mode = 99);
 
         /**
          * Returns a QList of all channels

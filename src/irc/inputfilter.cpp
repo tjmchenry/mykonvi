@@ -45,8 +45,18 @@ InputFilter::~InputFilter()
 void InputFilter::setServer(Server* newServer)
 {
     m_server = newServer;
+    m_connectionId = m_server->connectionId(); // for convenience
+
+    m_serverGroupId = -1;
+    if (m_server->getServerGroup())
+        m_serverGroupId = m_server->getServerGroup()->id();
+
     Application* konvApp = static_cast<Application*>(kapp);
-    connect(this, SIGNAL(notifyResponse(int, const QString&)), konvApp->getConnectionManager()->getNicksOnlineFilterModel(), SLOT(notifyResponse(int, const QString&)));
+    m_nickListModel = konvApp->getConnectionManager()->getNickListModel();
+    m_nicksOnlineModel = konvApp->getConnectionManager()->getNicksOnlineFilterModel();
+
+    connect(this, SIGNAL(notifyResponse(int, const QString&)), m_nicksOnlineModel, SLOT(notifyResponse(int, const QString&)));
+    connect(this, SIGNAL(endOfWhois(int, const QString&)), m_nicksOnlineModel, SLOT(whoisReceived(int, const QString&)));
 }
 
 /*
@@ -184,7 +194,15 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
     QString sourceHostmask = prefix.mid(pos + 1);
 
     // remember hostmask for this nick, it could have changed
-    m_server->addHostmaskToNick(sourceNick, sourceHostmask);
+    if (m_nickListModel->isNickOnline(m_connectionId, sourceNick))
+    {
+        m_nickListModel->setNickHostmask(m_connectionId, sourceNick, sourceHostmask);
+    }
+    else if (m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, sourceNick))
+    {
+        m_nicksOnlineModel->setNickHostmask(m_serverGroupId, m_connectionId, sourceNick, sourceHostmask);
+    }
+
     if (parameterList.isEmpty())
         return;
 
@@ -224,6 +242,9 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
                         return;
                     }
 
+                    m_nickListModel->setNickTimestamp(m_connectionId, sourceNick, parameterList.value(0), QDateTime::currentDateTime().toTime_t());
+                    m_nickListModel->setNickMoreActive(m_connectionId, sourceNick, parameterList.value(0));
+
                     channel->appendAction(sourceNick, ctcpArgument);
 
                     if (sourceNick != m_server->getNickname())
@@ -247,8 +268,6 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
                 // Check if we ignore queries from this nick
                 if (!isIgnore(prefix, Ignore::Query))
                 {
-                    m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), sourceNick, sourceHostmask);
-
                     // create new query (server will check for dupes)
                     Query* query = m_server->addQuery(sourceNick, false /* we didn't initiate this*/ );
 
@@ -594,6 +613,10 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
         QString channelName(trailing);
         // Sometimes JOIN comes without ":" in front of the channel name
 
+        m_nickListModel->addNickToChannel(m_connectionId, channelName, sourceNick);
+        // This setNickHostmask is redundant, but not if the nick was offline before being joining
+        m_nickListModel->setNickHostmask(m_connectionId, sourceNick, sourceHostmask);
+
         // Did we join the channel, or was it someone else?
         if (m_server->isNickname(sourceNick))
         {
@@ -634,6 +657,8 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
     }
     else if (command=="kick" && plHas(2))
     {
+        m_nickListModel->removeNickFromChannel(m_connectionId, parameterList.value(0), parameterList.value(1));
+
         m_server->nickWasKickedFromChannel(parameterList.value(0), parameterList.value(1), sourceNick, trailing);
     }
     else if (command=="part" && plHas(1))
@@ -642,6 +667,8 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
 
         QString channel(parameterList.value(0));
         QString reason(parameterList.value(1));
+
+        m_nickListModel->removeNickFromChannel(m_connectionId, sourceNick, channel);
 
         Channel* channelPtr = m_server->removeNickFromChannel(channel, sourceNick, reason);
 
@@ -653,6 +680,9 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
     else if (command=="quit" && plHas(1))
     {
         m_server->removeNickFromServer(sourceNick, trailing);
+
+        m_nickListModel->removeNick(m_connectionId, sourceNick);
+
         if (sourceNick != m_server->getNickname())
         {
             konv_app->notificationHandler()->quit(m_server->getStatusView(), sourceNick);
@@ -661,6 +691,8 @@ void InputFilter::parseClientCommand(const QString &prefix, const QString &comma
     else if (command=="nick" && plHas(1))
     {
         QString newNick(parameterList.value(0)); // Message may not include ":" in front of the new nickname
+
+        m_nickListModel->setNewNickname(m_connectionId, sourceNick, newNick);
 
         m_server->renameNick(sourceNick, newNick);
 
@@ -752,6 +784,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
         }
         else if (command == "kick" && plHas(3))
         {
+            m_nickListModel->removeNickFromChannel(m_connectionId, parameterList.value(1), parameterList.value(2));
+
             m_server->nickWasKickedFromChannel(parameterList.value(1), parameterList.value(2), prefix, trailing);
         }
         else if (command == "privmsg")
@@ -837,6 +871,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                         // re-set nickname, since the server may have truncated it
                         if (m_serverAssignedNick != m_server->getNickname())
                         {
+                            m_nickListModel->setNewNickname(m_connectionId, m_server->getNickname(), m_serverAssignedNick);
+
                             m_server->renameNick(m_server->getNickname(), m_serverAssignedNick);
                         }
 
@@ -1063,7 +1099,14 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
-                    m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), parameterList.value(1), true);
+                    if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nickListModel->setNickIdentified(m_connectionId, parameterList.value(1), true);
+                    }
+                    else if (Preferences::self()->useNotify() && m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nicksOnlineModel->setNickIdentified(m_serverGroupId, m_connectionId, parameterList.value(1), true);
+                    }
 
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
@@ -1096,7 +1139,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     }
 
                     // send list to channel
-                    m_server->nickListModel2()->insertNicksFromNames(m_server->connectionId(), parameterList.value(2), nickList);
+                    m_nickListModel->insertNicksFromNames(m_connectionId, parameterList.value(2), nickList);
 
                     // Display message only if this was not an automatic request.
                     if (!getAutomaticRequest("NAMES", parameterList.value(2)) == 1)
@@ -1221,8 +1264,6 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
-                    m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), parameterList.value(1), true);
-
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
@@ -1253,6 +1294,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                         }
                         else
                         {
+                            m_nickListModel->setNewNickname(m_connectionId, m_server->getNickname(), newNick);
+
                             // Update Server window
                             m_server->renameNick(m_server->getNickname(), newNick);
                             // Show message
@@ -1283,6 +1326,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                         }
                         else
                         {
+                            m_nickListModel->setNewNickname(m_connectionId, m_server->getNickname(), newNick);
+
                             m_server->renameNick(m_server->getNickname(), newNick);
                             m_server->appendMessageToFrontmost(i18n("Nick"), i18n("Erroneus nickname. Changing nick to %1.", newNick));
                             m_server->queue("NICK "+newNick);
@@ -1393,7 +1438,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 if (plHas(2))
                 {
                     // Tell nicksonline about the most recent ISON report
-                    emit notifyResponse(m_server->connectionId(), trailing);
+                    emit notifyResponse(m_connectionId, trailing);
                 }
                 break;
             }
@@ -1401,7 +1446,14 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(3))
                 {
-                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(1), true, trailing);
+                    if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nickListModel->setNickAway(m_connectionId, parameterList.value(1), true, trailing);
+                    }
+                    else if (m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nicksOnlineModel->setNickAway(m_serverGroupId, m_connectionId, parameterList.value(1), true, trailing);
+                    }
 
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
@@ -1436,8 +1488,16 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(4))
                 {
-                    m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), parameterList.value(1), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
-                    m_server->nickListModel2()->setNickRealName(m_server->connectionId(), parameterList.value(1), trailing);
+                    if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nickListModel->setNickHostmask(m_connectionId, parameterList.value(1), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
+                        m_nickListModel->setNickRealName(m_connectionId, parameterList.value(1), trailing);
+                    }
+                    else if (Preferences::self()->useNotify() && m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nicksOnlineModel->setNickHostmask(m_serverGroupId, m_connectionId, parameterList.value(1), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
+                        m_nicksOnlineModel->setNickRealName(m_serverGroupId, m_connectionId, parameterList.value(1), trailing);
+                    }
 
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
@@ -1491,7 +1551,14 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(2))
                 {
-                    m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), parameterList.value(1), true);
+                    if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nickListModel->setNickIdentified(m_connectionId, parameterList.value(1), true);
+                    }
+                    else if (Preferences::self()->useNotify() && m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nicksOnlineModel->setNickIdentified(m_serverGroupId, m_connectionId, parameterList.value(1), true);
+                    }
 
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
                     {
@@ -1505,6 +1572,15 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             }
             case RPL_WHOISSECURE:
             {
+                if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(1)))
+                {
+                    m_nickListModel->setNickSecureConnection(m_connectionId, parameterList.value(1), true);
+                }
+                else if (Preferences::self()->useNotify() && m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(1)))
+                {
+                    m_nicksOnlineModel->setNickSecureConnection(m_serverGroupId, m_connectionId, parameterList.value(1), true);
+                }
+
                 if (plHas(2))
                 {
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
@@ -1523,10 +1599,20 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                                                     // G=away G@=away,op G+=away,voice
                     bool bAway = parameterList.value(6).toUpper().startsWith('G');
 
-                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(5), bAway);
-                    m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), parameterList.value(5), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
-                    m_server->nickListModel2()->setNickRealName(m_server->connectionId(), parameterList.value(5), trailing.section(' ', 1));
-                    m_server->nickListModel2()->setNickNetServer(m_server->connectionId(), parameterList.value(5), parameterList.value(4));
+                    if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(5)))
+                    {
+                        m_nickListModel->setNickAway(m_connectionId, parameterList.value(5), bAway);
+                        m_nickListModel->setNickHostmask(m_connectionId, parameterList.value(5), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
+                        m_nickListModel->setNickRealName(m_connectionId, parameterList.value(5), trailing.section(' ', 1));
+                        m_nickListModel->setNickNetServer(m_connectionId, parameterList.value(5), parameterList.value(4));
+                    }
+                    else if (m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(5)))
+                    {
+                        m_nicksOnlineModel->setNickAway(m_serverGroupId, m_connectionId, parameterList.value(5), bAway);
+                        m_nicksOnlineModel->setNickHostmask(m_serverGroupId, m_connectionId, parameterList.value(5), i18n("%1@%2", parameterList.value(2), parameterList.value(3)));
+                        m_nicksOnlineModel->setNickRealName(m_serverGroupId, m_connectionId, parameterList.value(5), trailing.section(' ', 1));
+                        m_nicksOnlineModel->setNickNetServer(m_serverGroupId, m_connectionId, parameterList.value(5), parameterList.value(4));
+                    }
 
                     // Display message only if this was not an automatic request.
                     if (!m_whoRequestList.isEmpty())     // for safe
@@ -1600,43 +1686,54 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     // split up the list in channels where they are operator / user / voice
                     for (int index=0; index < channelList.count(); index++)
                     {
+
                         QString lookChannel=channelList[index];
+
+                        //TODO FIXME What if we aren't in this channel??
+
+                        m_nickListModel->addNickToChannel(m_connectionId, lookChannel.mid(1), parameterList.value(1));
+
                         if (lookChannel.startsWith('*') || lookChannel.startsWith('&'))
                         {
                             adminChannels.append(lookChannel.mid(1));
-                            m_server->setChannelNick(lookChannel.mid(1), parameterList.value(1), 16);
+
+                            m_nickListModel->setNickMode(m_connectionId, lookChannel.mid(1), parameterList.value(1), 'a', true);
                         }
                                                     // See bug #97354 part 2
                         else if((lookChannel.startsWith('!') || lookChannel.startsWith('~')) && m_server->isAChannel(lookChannel.mid(1)))
                         {
                             ownerChannels.append(lookChannel.mid(1));
-                            m_server->setChannelNick(lookChannel.mid(1), parameterList.value(1), 8);
+
+                            m_nickListModel->setNickMode(m_connectionId, lookChannel.mid(1), parameterList.value(1), 'q', true);
                         }
                                                     // See bug #97354 part 1
                         else if (lookChannel.startsWith("@+"))
                         {
                             opChannels.append(lookChannel.mid(2));
-                            m_server->setChannelNick(lookChannel.mid(2), parameterList.value(1), 4);
+
+                            m_nickListModel->setNickMode(m_connectionId, lookChannel.mid(1), parameterList.value(1), 'o', true);
                         }
                         else if (lookChannel.startsWith('@'))
                         {
                             opChannels.append(lookChannel.mid(1));
-                            m_server->setChannelNick(lookChannel.mid(1), parameterList.value(1), 4);
+
+                            m_nickListModel->setNickMode(m_connectionId, lookChannel.mid(1), parameterList.value(1), 'o', true);
                         }
                         else if (lookChannel.startsWith('%'))
                         {
                             halfopChannels.append(lookChannel.mid(1));
-                            m_server->setChannelNick(lookChannel.mid(1), parameterList.value(1), 2);
+
+                            m_nickListModel->setNickMode(m_connectionId, lookChannel.mid(1), parameterList.value(1), 'h', true);
                         }
                         else if (lookChannel.startsWith('+'))
                         {
                             voiceChannels.append(lookChannel.mid(1));
-                            m_server->setChannelNick(lookChannel.mid(1), parameterList.value(1), 1);
+
+                            m_nickListModel->setNickMode(m_connectionId, lookChannel.mid(1), parameterList.value(1), 'v', true);
                         }
                         else
                         {
                             userChannels.append(lookChannel);
-                            m_server->setChannelNick(lookChannel, parameterList.value(1), 0);
                         }
                     }                                 // endfor
                     // Display message only if this was not an automatic request.
@@ -1693,11 +1790,24 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(4))
                 {
-                    m_server->nickListModel2()->setNickNetServer(m_server->connectionId(), parameterList.value(1), parameterList.value(2));
-                    m_server->nickListModel2()->setNickNetServerInfo(m_server->connectionId(), parameterList.value(1), trailing);
-                    // Clear the away state on assumption that if nick is away, this message will be followed
-                    // by a 301 RPL_AWAY message.  Not necessary a invalid assumption, but what can we do?
-                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(1), false);
+                    if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nickListModel->setNickNetServer(m_connectionId, parameterList.value(1), parameterList.value(2));
+                        m_nickListModel->setNickNetServerInfo(m_connectionId, parameterList.value(1), trailing);
+
+                        // Clear the away state on assumption that if nick is away, this message will be followed
+                        // by a 301 RPL_AWAY message.  Not necessary a invalid assumption, but what can we do?
+                        m_nickListModel->setNickAway(m_connectionId, parameterList.value(1), false);
+                    }
+                    else if (Preferences::self()->useNotify() && m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nicksOnlineModel->setNickNetServer(m_serverGroupId, m_connectionId, parameterList.value(1), parameterList.value(2));
+                        m_nicksOnlineModel->setNickNetServerInfo(m_serverGroupId, m_connectionId, parameterList.value(1), trailing);
+
+                        // Clear the away state on assumption that if nick is away, this message will be followed
+                        // by a 301 RPL_AWAY message.  Not necessary a invalid assumption, but what can we do?
+                        m_nicksOnlineModel->setNickAway(m_serverGroupId, m_connectionId, parameterList.value(1), false);
+                    }
 
                     // Display message only if this was not an automatic request.
                     if (getAutomaticRequest("WHOIS", parameterList.value(1)) == 0)
@@ -1759,9 +1869,13 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     if (ok && parameterList.count() == 5)
                         signonTime.setTime_t(signonTimestamp);
 
-                    if (!signonTime.isNull())
+                    if (m_nickListModel->isNickOnline(m_connectionId, parameterList.value(1)))
                     {
-                        m_server->nickListModel2()->setNickOnlineSince(m_server->connectionId(), parameterList.value(1), signonTime);
+                        m_nickListModel->setNickOnlineSince(m_connectionId, parameterList.value(1), signonTime);
+                    }
+                    else if (Preferences::self()->useNotify() && m_nicksOnlineModel->isWatchedNickOnline(m_connectionId, parameterList.value(1)))
+                    {
+                        m_nicksOnlineModel->setNickOnlineSince(m_serverGroupId, m_connectionId, parameterList.value(1), signonTime);
                     }
 
                     // if idle time is longer than a day
@@ -1832,6 +1946,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                     {
                         setAutomaticRequest("WHOIS", parameterList.value(1), false);
                     }
+
+                    emit endOfWhois(m_connectionId, parameterList.value(1));
                 }
                 break;
             }
@@ -1931,7 +2047,9 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(1))
                 {
-                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(0), true);
+                    // This Away is only sent to our nick, which should always be online.
+                    // So there's no need to send it to watched nicks too, on the off chance the user watches their own nick.
+                    m_nickListModel->setNickAway(m_connectionId, parameterList.value(0), true);
 
                     m_server->setAway(true);
                 }
@@ -1941,7 +2059,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             {
                 if (plHas(1))
                 {
-                    m_server->nickListModel2()->setNickAway(m_server->connectionId(), parameterList.value(0), false);
+                    m_nickListModel->setNickAway(m_connectionId, parameterList.value(0), false);
 
                     m_server->setAway(false);
                 }
@@ -2040,6 +2158,8 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                             m_server->disconnectServer();
                         else
                         {
+                            m_nickListModel->setNewNickname(m_connectionId, m_server->getNickname(), newNick);
+
                             m_server->renameNick(m_server->getNickname(), newNick);
                             m_server->appendMessageToFrontmost(i18n("Nick"),
                                 i18n("Nickname %1 is unavailable. Trying %2.", parameterList.value(1), newNick));
@@ -2113,7 +2233,10 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             case RPL_LOGGEDIN:
             {
                 if (plHas(3))
+                {
                     m_server->appendStatusMessage(i18n("Info"), i18n("You are now logged in as %1.", parameterList.value(2)));
+                    m_nickListModel->setNickIdentified(m_connectionId, m_server->getNickname(), true);
+                }
 
                 break;
             }
@@ -2123,7 +2246,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 {
                     m_server->appendStatusMessage(i18n("Info"), i18n("SASL authentication successful."));
                     m_server->capEndNegotiation();
-                    m_server->nickListModel2()->setNickIdentified(m_server->connectionId(), m_server->getNickname(), true);
+                    m_nickListModel->setNickIdentified(m_connectionId, m_server->getNickname(), true);
                 }
 
                 break;
@@ -2324,6 +2447,9 @@ void InputFilter::parsePrivMsg(const QString& prefix, QStringList& parameterList
             Channel* channel = m_server->getChannelByName(parameterList.value(0));
             if(channel)
             {
+                m_nickListModel->setNickTimestamp(m_connectionId, source, parameterList.value(0), QDateTime::currentDateTime().toTime_t());
+                m_nickListModel->setNickMoreActive(m_connectionId, source, parameterList.value(0));
+
                 channel->append(source, message);
 
                 if(source != m_server->getNickname())
@@ -2350,11 +2476,6 @@ void InputFilter::parsePrivMsg(const QString& prefix, QStringList& parameterList
     {
         if(!isIgnore(prefix,Ignore::Query))
         {
-            m_server->nickListModel2()->addNickToChannel(m_server->connectionId(), source, parameterList.value(0));
-            m_server->nickListModel2()->addNickToChannel(m_server->connectionId(), source, source);
-
-            m_server->nickListModel2()->setNickHostmask(m_server->connectionId(), source, sourceHostmask);
-
             // Create a new query (server will check for dupes)
             Query* query = m_server->addQuery(source, false /*we didn't initiate this*/ );
 

@@ -48,10 +48,10 @@ namespace Konversation
         m_serverList->setFocus();
 
         connect(m_serverList, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextMenu(QPoint)));
-        connect(m_serverList, SIGNAL(activated(const QModelIndex&)), this, SLOT(slotOk()));
-        connect(m_serverList->selectionModel(), SIGNAL(selectionChanged(const QItemSelection&, const QItemSelection&)), this, SLOT(updateButtons()));
-        connect(m_serverList, SIGNAL(expanded(const QModelIndex&)), this, SLOT(slotSetGroupExpanded(const QModelIndex&)));
-        connect(m_serverList, SIGNAL(collapsed(const QModelIndex&)), this, SLOT(slotSetGroupCollapsed(const QModelIndex&)));
+        connect(m_serverList, SIGNAL(activated(QModelIndex)), this, SLOT(slotOk()));
+        connect(m_serverList->selectionModel(), SIGNAL(selectionChanged(QItemSelection,QItemSelection)), this, SLOT(updateButtons()));
+        connect(m_serverList, SIGNAL(expanded(QModelIndex)), this, SLOT(slotSetGroupExpanded(QModelIndex)));
+        connect(m_serverList, SIGNAL(collapsed(QModelIndex)), this, SLOT(slotSetGroupCollapsed(QModelIndex)));
         connect(m_addButton, SIGNAL(clicked()), this, SLOT(slotAdd()));
         connect(m_editButton, SIGNAL(clicked()), this, SLOT(slotEdit()));
         connect(m_delButton, SIGNAL(clicked()), this, SLOT(slotDelete()));

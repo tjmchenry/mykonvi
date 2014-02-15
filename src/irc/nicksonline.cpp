@@ -43,11 +43,11 @@ NicksOnlineFilterModel::NicksOnlineFilterModel(QObject* parent) : QSortFilterPro
     updateMinimumRowHeight();
 
     connect(m_timer, SIGNAL(timeout()), this, SLOT(isonCheck()));
-    connect(m_connectionManager, SIGNAL(connectedServerGroupsChanged(int, int)), this, SLOT(updateNotifyConnection(int, int)));
+    connect(m_connectionManager, SIGNAL(connectedServerGroupsChanged(int,int)), this, SLOT(updateNotifyConnection(int,int)));
     //TODO get these signals from input filter instead
-    connect(m_nickListModel, SIGNAL(nickOnline(int, int, QString)), this, SLOT(nickOnline(int, int, QString)));
-    connect(m_nickListModel, SIGNAL(nickOffline(int, int, Nick2*)), this, SLOT(nickOffline(int, int, Nick2*)));
-    connect(this, SIGNAL(requestWhois(int, const QString&)), this, SLOT(slotRequestWhois(int, const QString&)));
+    connect(m_nickListModel, SIGNAL(nickOnline(int,int,QString)), this, SLOT(nickOnline(int,int,QString)));
+    connect(m_nickListModel, SIGNAL(nickOffline(int,int,Nick2*)), this, SLOT(nickOffline(int,int,Nick2*)));
+    connect(this, SIGNAL(requestWhois(int,QString)), this, SLOT(slotRequestWhois(int,QString)));
 }
 
 NicksOnlineFilterModel::~NicksOnlineFilterModel()
@@ -951,7 +951,7 @@ NicksOnline::NicksOnline(QWidget* parent) : ChatWindow(parent)
     Preferences::restoreColumnState(m_nicksOnlineView, "NicksOnline ViewSettings");
 
     connect(m_nicksOnlineView, SIGNAL(doubleClicked(QModelIndex)), this, SLOT(doubleClicked(QModelIndex)));
-    connect(m_nicksOnlineView->selectionModel(), SIGNAL(currentChanged(QModelIndex, QModelIndex)), this, SLOT(currentChanged(QModelIndex, QModelIndex)));
+    connect(m_nicksOnlineView->selectionModel(), SIGNAL(currentChanged(QModelIndex,QModelIndex)), this, SLOT(currentChanged(QModelIndex,QModelIndex)));
     connect(m_nicksOnlineView, SIGNAL(collapsed(QModelIndex)), this, SLOT(collapsed(QModelIndex)));
     connect(m_nicksOnlineView, SIGNAL(expanded(QModelIndex)), this, SLOT(expanded(QModelIndex)));
     connect(m_nicksOnlineView, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextMenu(QPoint)));
@@ -994,7 +994,7 @@ void NicksOnline::addNickname()
     }
 
     EditNotifyDialog* end = new EditNotifyDialog(this, sgId);
-    connect(end, SIGNAL(notifyChanged(int, QString)), this, SLOT(slotAddNickname(int, QString)));
+    connect(end, SIGNAL(notifyChanged(int,QString)), this, SLOT(slotAddNickname(int,QString)));
 
     end->show();
 }

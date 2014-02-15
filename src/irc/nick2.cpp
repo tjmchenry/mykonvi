@@ -35,8 +35,8 @@ Nick2::Nick2(int connectionId, const QString& nick) : QObject()
 
     m_queryTooltip = QString();
 
-    connect(this, SIGNAL(channelPropertiesChanged(const QString&)), this, SLOT(updateStatusValue(const QString&)));
-    connect(this, SIGNAL(channelPropertiesChanged(const QString&)), this, SLOT(updateTooltips(const QString&)));
+    connect(this, SIGNAL(channelPropertiesChanged(QString)), this, SLOT(updateStatusValue(QString)));
+    connect(this, SIGNAL(channelPropertiesChanged(QString)), this, SLOT(updateTooltips(QString)));
     connect(this, SIGNAL(prettyInfoChanged()), this, SLOT(updatePrettyInfo()));
 }
 

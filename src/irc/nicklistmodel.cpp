@@ -77,16 +77,12 @@ void NickListModel::addServer(int connectionId)
     m_servers[connectionId] = QPersistentModelIndex();
     m_nickHashes.insert(connectionId, NickHash());
     m_nickLists.insert(connectionId, QList<Nick2*>());
-    QMap<int, QPersistentModelIndex>::const_iterator i = m_servers.constFind(connectionId);
-    int position = 0;
-    while (i != m_servers.constBegin())
-    {
-        position++;
-        i--;
-    }
-    QModelIndex index = NickListModel::createIndex(position, 0, (quint32)connectionId);
+
+    int position = m_servers.keys().indexOf(connectionId);
+    QModelIndex index = NickListModel::createIndex(position, 0, -1);
     QPersistentModelIndex serverIndex = QPersistentModelIndex(index);
-    m_servers[index.internalId()] = serverIndex;
+
+    m_servers[connectionId] = serverIndex;
 }
 
 void NickListModel::removeServer(int connectionId)
@@ -392,12 +388,20 @@ void NickListModel::slotNickChanged(int connectionId, const QString& nick, QVect
     }
 }
 
-QPersistentModelIndex NickListModel::serverIndex(int connectionId)
+QPersistentModelIndex NickListModel::serverIndex(int connectionId) const
 {
     if (m_servers.contains(connectionId))
         return m_servers[connectionId];
 
     return QPersistentModelIndex();
+}
+
+int NickListModel::getConnectionIdFromRow(int row) const
+{
+    if (m_servers.count() > row)
+        return m_servers.keys().at(row);
+
+    return -1;
 }
 
 QModelIndex NickListModel::index(int row, int column, const QModelIndex& parent) const
@@ -418,23 +422,21 @@ QModelIndex NickListModel::index(int row, int column, const QModelIndex& parent)
             i++;
         }
         return i.value();
-        //return createIndex(row, column, (quint32)i.key());
     }
 
-    return createIndex(row, column, m_nickLists[parent.internalId()].at(row));
+    return createIndex(row, column, getConnectionIdFromRow(parent.row()));
 }
 
 QModelIndex NickListModel::parent(const QModelIndex& index) const
 {
     if (index.isValid())
     {
-        if (m_servers.contains(index.internalId()))
+        if (index.internalId() < 0)
             return QModelIndex();
         else
         {
-            Nick2* item = static_cast<Nick2*>(index.internalPointer());
-            if (item && m_servers.contains(item->getConnectionId()))
-                return m_servers[item->getConnectionId()];
+            if (m_servers.contains(index.internalId()))
+                return m_servers[index.internalId()];
         }
     }
 
@@ -461,8 +463,15 @@ int NickListModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid())
     {
-        if (m_servers.contains(parent.internalId()))
-            return m_nickLists[parent.internalId()].count();
+        if (parent.internalId() < 0)
+        {
+            int cId = getConnectionIdFromRow(parent.row());
+
+            if (m_nickLists.contains(cId))
+                return m_nickLists[cId].count();
+            else
+                return 0;
+        }
         else
             return 0;
     }
@@ -475,11 +484,11 @@ QVariant NickListModel::data(const QModelIndex& index, int role) const
     if (!index.isValid() || index.row() >= rowCount(index.parent()))
         return QVariant();
 
-    if (!index.parent().isValid() && m_servers.contains(index.internalId())) //top level item
+    if (!index.parent().isValid() && index.internalId() < 0) //top level item
     {
         if (role == Qt::DisplayRole)
         {
-            Server* server = m_connectionManager->getServerByConnectionId(index.internalId());
+            Server* server = m_connectionManager->getServerByConnectionId(getConnectionIdFromRow(index.row()));
             if (server)
                 return server->getServerName();
             else
@@ -489,7 +498,7 @@ QVariant NickListModel::data(const QModelIndex& index, int role) const
             return QVariant();
     }
 
-    Nick2* nick = static_cast<Nick2*>(index.internalPointer());
+    Nick2* nick = m_nickLists[index.internalId()].at(index.row());
 
     if (role == Qt::DisplayRole)
     {
@@ -565,8 +574,8 @@ Qt::ItemFlags NickListModel::flags(const QModelIndex& index) const
 
 bool NickListModel::hasChildren(const QModelIndex& index) const
 {
-    if (index.isValid() && !index.parent().isValid() && m_servers.contains(index.internalId()))
-        return (m_nickLists[index.internalId()].count() > 0);
+    if (index.isValid() && !index.parent().isValid() && index.internalId() < 0)
+        return (m_nickLists[getConnectionIdFromRow(index.row())].count() > 0);
 
     else if(!index.isValid())
         return (m_servers.count() > 0);
@@ -817,11 +826,12 @@ void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
 
                     for (int i = 0; i < rowCount(serverIndex()); i++)
                     {
-                        Nick2* nick = static_cast<Nick2*>(mapToSource(index(i, 0)).internalPointer());
-                        if(nick->getNickname().startsWith(pattern, Preferences::self()->nickCompletionCaseSensitive() ? Qt::CaseSensitive : Qt::CaseInsensitive) &&
-                          (nick->getTimestamp(m_channelName) > timestamp))
+                        QModelIndex index = ChannelNickListFilterModel::index(i, 0);
+
+                        if(index.data(NickListModel::NickRole).toString().startsWith(pattern, Preferences::self()->nickCompletionCaseSensitive() ? Qt::CaseSensitive : Qt::CaseInsensitive) &&
+                          (index.data(TimestampRole).toUInt() > timestamp))
                         {
-                            timestamp = nick->getTimestamp(m_channelName);
+                            timestamp = index.data(TimestampRole).toUInt();
                             m_completionPosition = listPosition;
                         }
                         ++listPosition;
@@ -835,7 +845,7 @@ void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
 
                 do
                 {
-                    QString lookNick = static_cast<Nick2*>(mapToSource(index(m_completionPosition,0)).internalPointer())->getNickname();
+                    QString lookNick = ChannelNickListFilterModel::index(m_completionPosition, 0).data(NickListModel::NickRole).toString();
 
                     if(!prefixCharacter.isEmpty() && lookNick.contains(prefixCharacter))
                     {
@@ -991,10 +1001,10 @@ bool ChannelNickListFilterModel::filterAcceptsRow(int sourceRow, const QModelInd
 
         if (index.isValid())
         {
-            if (sourceNickModel()->hasChildren(sourceParent) && m_connectionId == index.internalId())
+            if (index.internalId() < 0 && sourceNickModel()->getConnectionIdFromRow(index.row()) == m_connectionId && sourceModel()->hasChildren(sourceParent))
                 return true;
-
-            return index.data(NickListModel::ChannelsRole).toStringList().contains(m_channelName);
+            if (index.internalId() == m_connectionId)
+                return index.data(NickListModel::ChannelsRole).toStringList().contains(m_channelName);
         }
     }
 

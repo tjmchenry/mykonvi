@@ -63,7 +63,8 @@ class NickListModel : public QAbstractListModel
 
         int columnCount(const QModelIndex& parent = QModelIndex()) const;
         int rowCount(const QModelIndex& parent = QModelIndex()) const;
-        QPersistentModelIndex serverIndex(int connectionId);
+        QPersistentModelIndex serverIndex(int connectionId) const;
+        int getConnectionIdFromRow(int row) const;
         QModelIndex index(int row, int column, const QModelIndex& parent = QModelIndex()) const;
         QModelIndex parent(const QModelIndex& index) const;
 

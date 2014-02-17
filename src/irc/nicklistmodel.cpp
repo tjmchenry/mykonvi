@@ -826,7 +826,7 @@ void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
 
                     for (int i = 0; i < rowCount(serverIndex()); i++)
                     {
-                        QModelIndex index = ChannelNickListFilterModel::index(i, 0);
+                        QModelIndex index = ChannelNickListFilterModel::index(i, 0, serverIndex());
 
                         if(index.data(NickListModel::NickRole).toString().startsWith(pattern, Preferences::self()->nickCompletionCaseSensitive() ? Qt::CaseSensitive : Qt::CaseInsensitive) &&
                           (index.data(TimestampRole).toUInt() > timestamp))
@@ -845,7 +845,7 @@ void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
 
                 do
                 {
-                    QString lookNick = ChannelNickListFilterModel::index(m_completionPosition, 0).data(NickListModel::NickRole).toString();
+                    QString lookNick = ChannelNickListFilterModel::index(m_completionPosition, 0, serverIndex()).data(NickListModel::NickRole).toString();
 
                     if(!prefixCharacter.isEmpty() && lookNick.contains(prefixCharacter))
                     {
@@ -932,8 +932,8 @@ QString ChannelNickListFilterModel::completeNick(const QString& pattern, bool& c
 
     for (int i = 0; i < rowCount(serverIndex()); ++i)
     {
-        QModelIndex nickIndex = mapToSource(index(i, 0));
-        QString nickName = nickIndex.data(NickListModel::NickRole).toString();
+        QModelIndex index = ChannelNickListFilterModel::index(i, 0, serverIndex());
+        QString nickName = index.data(NickListModel::NickRole).toString();
 
         if (!prefix.isEmpty() && nickName.contains(prefixCharacter))
         {
@@ -942,7 +942,7 @@ QString ChannelNickListFilterModel::completeNick(const QString& pattern, bool& c
 
         if (nickName.contains(regexp))
         {
-            foundNicks.append(nickIndex);
+            foundNicks.append(index);
         }
     }
 

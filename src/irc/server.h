@@ -100,7 +100,7 @@ class Server : public QObject
         void cycle();
         void abortScheduledRecreation() { m_recreationScheduled = false; }
 
-        int connectionId() { return m_connectionId; }
+        int connectionId() const { return m_connectionId; }
 
         ConnectionSettings& getConnectionSettings() { return m_connectionSettings; }
         void setConnectionSettings(ConnectionSettings& settings) { m_connectionSettings = settings; }
@@ -226,7 +226,7 @@ class Server : public QObject
          * notify list, and has not initiated a query with you, may well be online,
          * but server doesn't know if it is or not, in which case False is returned.
          */
-        bool isNickOnline(const QString &nickname);
+        bool isNickOnline(const QString &nickname) const;
         /** Returns a list of all the NickInfos that are online and known to the server.
          * Caller should not modify the list.
          * A nick will be known if:
@@ -236,20 +236,7 @@ class Server : public QObject
          *
          * @return A QMap of KSharedPtrs to NickInfos indexed by lowercase nickname.
          */
-        QStringList getSharedChannels(const QString& nickname);
-        /** Returns a list of all the channels (joined or unjoined) that a nick is in.
-         *  @param nickname    The desired nickname.  Case insensitive.
-         *  @return            A list of channels the nick is in.  Empty if none.
-         *
-         *  A nick will not appear in the Unjoined channels list unless a WHOIS
-         *  has been performed on it.
-         */
-        QStringList getNickChannels(const QString& nickname);
-        /** Returns a list of all the channels we're in that nickname is also in.
-         *  @param nickname    The desired nickname.  Case insensitive.
-         *  @return            A list of channels the nick is in that we're also in.  Empty if none.
-         */
-        Nick2* getNick(const QString& nickname);
+        Nick2* getNick(const QString& nickname) const;
 
         /**
          * Returns a QList of all channels

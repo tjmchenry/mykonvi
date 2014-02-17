@@ -50,16 +50,7 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
         QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const;
         bool isWatchedNickOnline(int cId, const QString& nick) const;
         Nick2* getWatchedNick(int cId, const QString& nick) const;
-
-        void setNickHostmask(int sgId, int cId, const QString& nick, const QString& hostmask);
-        void setNickIdentified(int sgId, int cId, const QString& nick, bool identified);
-        void setNickRealName(int sgId, int cId, const QString& nick, const QString& realName);
-        void setNickSecureConnection(int sgId, int cId, const QString& nick, bool secure);
-        void setNickOnlineSince(int sgId, int cId, const QString& nick, const QDateTime& onlineSince);
-        void setNickNetServer(int sgId, int cId, const QString& nick, const QString& netServer);
-        void setNickNetServerInfo(int sgId, int cId, const QString& nick, const QString& netServerInfo);
-        void setNickMode(int sgId, int cId, const QString& channel, const QString& nick, char mode, bool state);
-        void setNickAway(int sgId, int cId, const QString& nick, bool away, const QString& awayMessage = QString());
+        Nick2* getWatchedNick(int sgId, int cId, const QString& nick) const;
 
     signals:
         void requestWhois(int cId, const QString& nick);
@@ -88,12 +79,12 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
         bool isWatchTypeEmpty(int type) const;
         bool isNickWatched(int sgId, int cId, const QString& nick) const;
         bool isWatchedNickOnline(int sgId, int cId, const QString& nick) const;
-        Nick2* getWatchedNick(int sgId, int cId, const QString& nick) const;
 
         QModelIndex getNotifyNickIndex(int sgId, const QString& nick) const;
 
     protected slots:
         void isonCheck();
+        void slotNickChanged(int cId, const QString& nick, QVector<int> columnsChanged, QVector<int> rolesChanged);
 
     private:
         void updateMinimumRowHeight();

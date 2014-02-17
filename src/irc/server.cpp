@@ -144,7 +144,7 @@ Server::Server(QObject* parent, ConnectionSettings& settings) : QObject(parent)
 
 Server::~Server()
 {
-    m_nickListModel2->removeServer(connectionId());
+    nickListModel2()->removeServer(connectionId());
     //send queued messages
     kDebug() << "Server::~Server(" << getServerName() << ")";
 
@@ -692,8 +692,7 @@ void Server::registerWithServices()
     if (!getIdentity())
         return;
 
-    Nick2* nick = getNick(getNickname());
-    if (nick && nick->isIdentified())
+    if (isNickOnline(getNickname()) && getNick(getNickname())->isIdentified())
         return;
 
     if (getIdentity()->getAuthType() == "nickserv")
@@ -1544,38 +1543,14 @@ void Server::ctcpReply(const QString &receiver,const QString &text)
 
 // Returns pointer to the Nick for a given channel and nickname.
 // 0 if not found.
-Nick2* Server::getNick(const QString& nickname)
+Nick2* Server::getNick(const QString& nickname) const
 {
     return nickListModel2()->getNick(connectionId(), nickname);
 }
 
-// Returns a list of all the shared channels
-QStringList Server::getSharedChannels(const QString& nickname)
+bool Server::isNickOnline(const QString &nickname) const
 {
-    QStringList channelList = m_nickListModel2->getNickChannels(m_connectionId, nickname);
-    QStringList ourChannelList = m_nickListModel2->getNickChannels(m_connectionId, getNickname());
-
-    QStringList sharedChannelsList = QStringList();
-    QStringList::ConstIterator i;
-
-    for (i = ourChannelList.constBegin(); i != ourChannelList.constEnd(); ++i)
-    {
-        if (channelList.contains(*i))
-            sharedChannelsList.append(*i);
-    }
-
-    return sharedChannelsList;
-}
-
-// Returns a list of all the channels (joined or unjoined) that a nick is in.
-QStringList Server::getNickChannels(const QString& nickname)
-{
-    return m_nickListModel2->getNickChannels(m_connectionId, nickname);
-}
-
-bool Server::isNickOnline(const QString &nickname)
-{
-    return m_nickListModel2->isNickOnline(m_connectionId, nickname);
+    return nickListModel2()->isNickOnline(m_connectionId, nickname);
 }
 
 QString Server::getOwnIpByNetworkInterface()
@@ -1602,8 +1577,8 @@ Query* Server::addQuery(const QString& nickname, bool weinitiated)
     {
         QString lcNickname = nickname.toLower();
 
-        m_nickListModel2->addNickToChannel(connectionId(), nickname, getNickname());
-        m_nickListModel2->addNickToChannel(connectionId(), nickname, nickname);
+        nickListModel2()->addNickToChannel(connectionId(), nickname, getNickname());
+        nickListModel2()->addNickToChannel(connectionId(), nickname, nickname);
 
         query = getViewContainer()->addQuery(this, nickname, weinitiated);
 
@@ -1883,7 +1858,7 @@ quint16 Server::stringToPort(const QString &port, bool *ok)
 QString Server::recipientNick() const
 {
     //FIXME set the root index for this view
-    return DCC::RecipientDialog::getNickname(getViewContainer()->getWindow(), m_nickListModel2);
+    return DCC::RecipientDialog::getNickname(getViewContainer()->getWindow(), nickListModel2());
 }
 
 void Server::addDccGet(const QString &sourceNick, const QStringList &dccArguments)
@@ -2491,10 +2466,8 @@ void Server::updateChannelMode(const QString &updater, const QString &channelNam
     QString userModes="vhoqa";                    // voice halfop op owner admin
     int modePos = userModes.indexOf(mode);
 
-    if (modePos >= 0)
-    {
-        m_nickListModel2->setNickMode(m_connectionId, channelName, parameter, mode, plus);
-    }
+    if (modePos >= 0 && isNickOnline(parameter))
+        getNick(parameter)->setMode(channelName, mode, plus);
 
     // Update channel ban list.
     if (mode == 'b')
@@ -2595,12 +2568,18 @@ Channel* Server::nickJoinsChannel(const QString &channelName, const QString &nic
 
 void Server::addHostmaskToNick(const QString& sourceNick, const QString& sourceHostmask)
 {
-    m_nickListModel2->setNickHostmask(m_connectionId, sourceNick, sourceHostmask);
+    if (isNickOnline(sourceNick))
+    {
+        getNick(sourceNick)->setHostmask(sourceHostmask);
+    }
 }
 
 QString Server::getNickHostmask(const QString& sourceNick) const
 {
-    return m_nickListModel2->getNickHostmask(m_connectionId, sourceNick);
+    if (isNickOnline(sourceNick))
+        return getNick(sourceNick)->getHostmask();
+    else
+        return QString();
 }
 
 Channel* Server::removeNickFromChannel(const QString &channelName, const QString &nickname, const QString &reason, bool quit)
@@ -2629,8 +2608,8 @@ void Server::removeNickFromServer(const QString &nickname,const QString &reason)
 {
     foreach (Channel* channel, m_channelList)
     {
-        if (m_nickListModel2->isNickInChannel(connectionId(), channel->getName(), nickname))
-            removeNickFromChannel(channel->getName(),nickname,reason,true);
+        if (isNickOnline(nickname) && getNick(nickname)->isInChannel(channel->getName()))
+            removeNickFromChannel(channel->getName(), nickname, reason, true);
     }
 
     Query* query = getQueryByName(nickname);
@@ -2674,8 +2653,13 @@ void Server::renameNick(const QString &nickname, const QString &newNick)
 
 void Server::userhost(const QString& nick,const QString& hostmask,bool away,bool /* ircOp */)
 {
-    m_nickListModel2->setNickAway(m_connectionId, nick, away);
-    addHostmaskToNick(nick, hostmask);
+    if (isNickOnline(nick))
+    {
+        Nick2* nickObj = getNick(nick);
+        nickObj->setAway(away);
+        nickObj->setHostmask(hostmask);
+    }
+
     // remember my IP for DCC things
                                                   // myself
     if (m_ownIpByUserhost.isEmpty() && nick == getNickname())
@@ -3167,8 +3151,6 @@ void Server::requestUnaway()
 
 void Server::setAway(bool away)
 {
-    m_nickListModel2->setNickAway(m_connectionId, getNickname(), away);
-
     IdentityPtr identity = getIdentity();
 
     if (away)

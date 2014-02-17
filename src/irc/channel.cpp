@@ -1756,26 +1756,36 @@ void Channel::childAdjustFocus()
     refreshModeButtons();
 }
 
+Nick2* Channel::getNick(const QString& nick) const
+{
+    return m_server->getNick(nick);
+}
+
+bool Channel::isNickOnline(const QString& nick) const
+{
+    return m_server->isNickOnline(nick);
+}
+
 bool Channel::isNickInChannel(const QString& nick) const
 {
-    if (m_channelNickListModel)
-        return m_channelNickListModel->isNickInChannel(nick);
+    if (isNickOnline(nick))
+        return getNick(nick)->isInChannel(nick);
 
     return false;
 }
 
 bool Channel::isNickAnyTypeOfOp(const QString& nick) const
 {
-    if (m_channelNickListModel)
-        return m_channelNickListModel->isNickAnyTypeOfOp(nick);
+    if (isNickOnline(nick))
+        return getNick(nick)->isAnyTypeOfOp(nick);
 
     return false;
 }
 
 uint Channel::getNickTimestamp(const QString& nick) const
 {
-    if (m_channelNickListModel)
-        return m_channelNickListModel->getNickTimestamp(nick);
+    if (isNickOnline(nick))
+        return getNick(nick)->getTimestamp(nick);
 
     return 0;
 }

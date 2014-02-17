@@ -18,6 +18,7 @@
 #include <QObject>
 #include <QTextStream>
 #include <QDateTime>
+#include <QVector>
 
 typedef QHash<char, bool> Modes;
 typedef QHash<QString, QVariant> ChannelProperties;
@@ -33,12 +34,12 @@ class Nick2 : public QObject
 
     public:
         Nick2(int connectionId, const QString& nick);
-        Nick2(const Nick2&);
         ~Nick2();
 
         void addChannel(const QString& channel);
         void removeChannel(const QString& channel);
         QStringList getChannels() const;
+        const ChannelHash* getChannelProperties() const;
         bool isInChannel(const QString& channel) const;
         bool isInAnyChannel() const;
 
@@ -100,7 +101,7 @@ class Nick2 : public QObject
 
         void lessActive(const QString& channel);
         void moreActive(const QString& channel);
-        uint getRecentActivity(const QString& channel) const;
+        uint getActivity(const QString& channel) const;
 
         int getConnectionId() const;
         QString getNetServer() const;
@@ -110,7 +111,9 @@ class Nick2 : public QObject
 
     signals:
         void channelPropertiesChanged(const QString& channel);
-        void nickChanged(const QString& nick);
+        void tooltipsChanged(const QString& channel);
+        void statusValueChanged(const QString& channel);
+        void nickChanged(int cId, const QString& nick, QVector<int> columns, QVector<int> roles);
         void prettyInfoChanged();
 
     public slots:

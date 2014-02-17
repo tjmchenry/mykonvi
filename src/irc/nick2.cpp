@@ -12,11 +12,12 @@
 */
 
 #include "nick2.h"
+#include "nicklistmodel.h"
 #include "application.h"
 #include "images.h"
 #include "preferences.h"
 
-Nick2::Nick2(int connectionId, const QString& nick) : QObject()
+Nick2::Nick2(int connectionId, const QString& nick)
 {
     m_nick = nick;
     m_channelHash = ChannelHash();
@@ -37,11 +38,9 @@ Nick2::Nick2(int connectionId, const QString& nick) : QObject()
 
     connect(this, SIGNAL(channelPropertiesChanged(QString)), this, SLOT(updateStatusValue(QString)));
     connect(this, SIGNAL(channelPropertiesChanged(QString)), this, SLOT(updateTooltips(QString)));
+    connect(this, SIGNAL(statusValueChanged(QString)), this, SLOT(updateStatusValue(QString)));
+    connect(this, SIGNAL(tooltipsChanged(QString)), this, SLOT(updateTooltips(QString)));
     connect(this, SIGNAL(prettyInfoChanged()), this, SLOT(updatePrettyInfo()));
-}
-
-Nick2::Nick2(const Nick2&)
-{
 }
 
 Nick2::~Nick2()
@@ -68,7 +67,10 @@ void Nick2::addChannel(const QString& channel)
     properties->insert("tooltip", QString());
 
     m_channelHash.insert(channel, properties);
+
     emit channelPropertiesChanged(channel);
+
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>(), QVector<int>() << NickListModel::ChannelsRole);
 }
 
 void Nick2::removeChannel(const QString& channel)
@@ -79,6 +81,11 @@ void Nick2::removeChannel(const QString& channel)
 QStringList Nick2::getChannels() const
 {
     return QStringList(m_channelHash.keys());
+}
+
+const ChannelHash* Nick2::getChannelProperties() const
+{
+    return &m_channelHash;
 }
 
 bool Nick2::isInChannel(const QString& channel) const
@@ -181,7 +188,6 @@ bool Nick2::setOwner(const QString& channel, bool state)
     m_channelHash[channel]->value("modes").value<Modes*>()->insert('q', state);
 
     emit channelPropertiesChanged(channel);
-    emit nickChanged(getNickname());
 
     return true;
 }
@@ -194,7 +200,6 @@ bool Nick2::setAdmin(const QString& channel, bool state)
     m_channelHash[channel]->value("modes").value<Modes*>()->insert('a', state);
 
     emit channelPropertiesChanged(channel);
-    emit nickChanged(getNickname());
 
     return true;
 }
@@ -207,7 +212,6 @@ bool Nick2::setOp(const QString& channel, bool state)
     m_channelHash[channel]->value("modes").value<Modes*>()->insert('o', state);
 
     emit channelPropertiesChanged(channel);
-    emit nickChanged(getNickname());
 
     return true;
 }
@@ -220,7 +224,6 @@ bool Nick2::setHalfOp(const QString& channel, bool state)
     m_channelHash[channel]->value("modes").value<Modes*>()->insert('h', state);
 
     emit channelPropertiesChanged(channel);
-    emit nickChanged(getNickname());
 
     return true;
 }
@@ -233,7 +236,6 @@ bool Nick2::setVoice(const QString& channel, bool state)
     m_channelHash[channel]->value("modes").value<Modes*>()->insert('v', state);
 
     emit channelPropertiesChanged(channel);
-    emit nickChanged(getNickname());
 
     return true;
 }
@@ -253,49 +255,54 @@ void Nick2::updateStatusValue(const QString& channel)
     {
         int value = 0;
         bool away = false;
+        QString sortingOrder = Preferences::self()->sortOrder();
 
         Images* images = Application::instance()->images();
         QPixmap icon;
 
-        if (isAway()) //FIXME this doesn't really make sense why would away people be worth 1 more?
-        {
-            value = 1;
+        if (isAway())
             away = true;
-        }
 
         if (isOwner(channel))
         {
-            value += 64;
+            value = sortingOrder.indexOf('q');
             icon = images->getNickIcon(Images::Owner, away);
         }
         else if (isAdmin(channel))
         {
-            value += 128;
+            value = sortingOrder.indexOf('p');
             icon = images->getNickIcon(Images::Admin, away);
         }
         else if (isOp(channel))
         {
-            value += 32;
+            value = sortingOrder.indexOf('o');
             icon = images->getNickIcon(Images::Op, away);
         }
         else if (isHalfOp(channel))
         {
-            value += 16;
+            value = sortingOrder.indexOf('h');
             icon = images->getNickIcon(Images::HalfOp, away);
         }
         else if (hasVoice(channel))
         {
-            value += 8;
+            value = sortingOrder.indexOf('v');
             icon = images->getNickIcon(Images::Voice, away);
         }
         else
         {
-            value += 4;
+            value = sortingOrder.indexOf('-');
             icon = images->getNickIcon(Images::Normal, away);
         }
 
-        m_channelHash[channel]->insert("statusValue", value);
-        m_channelHash[channel]->insert("icon", icon);
+        // Make sure the values have changed before we emit nickChanged unescessarily.
+        // Icon needs to be converted to an image, because QPixmap does not have operator()==
+        if (value != getStatusValue(channel) || icon.toImage() != getIcon(channel).toImage())
+        {
+            m_channelHash[channel]->insert("statusValue", value);
+            m_channelHash[channel]->insert("icon", icon);
+
+            emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << 0 << 1, QVector<int>() << Qt::DecorationRole << NickListModel::ChannelPropertiesRole);
+        }
     }
 }
 
@@ -337,9 +344,10 @@ void Nick2::setHostmask(const QString& newMask)
     m_hostmask = newMask;
     m_loweredHostmask = newMask.toLower();
 
-    emit channelPropertiesChanged(QString());
-    emit nickChanged(getNickname());
+    emit tooltipsChanged(QString());
     emit prettyInfoChanged();
+
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << 0 << 1, QVector<int>() << Qt::DisplayRole << NickListModel::HostmaskRole << NickListModel::LoweredHostmaskRole);
 }
 
 QString Nick2::getChannelTooltip(const QString& channel) const
@@ -393,6 +401,8 @@ void Nick2::updateTooltips(const QString& channel)
 
         m_channelHash[channel]->insert("tooltip", strTooltip);
     }
+
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << 0 << 1, QVector<int>() << Qt::ToolTipRole);
 }
 
 void Nick2::tooltipTableData(QTextStream &tooltip) const
@@ -431,7 +441,7 @@ void Nick2::tooltipTableData(QTextStream &tooltip) const
     }
 }
 
-uint Nick2::getRecentActivity(const QString& channel) const
+uint Nick2::getActivity(const QString& channel) const
 {
     if (isInChannel(channel))
         return m_channelHash[channel]->value("activity").toUInt();
@@ -463,6 +473,8 @@ void Nick2::setTimestamp(const QString& channel, uint timestamp)
 {
     if (isInChannel(channel))
         m_channelHash[channel]->insert("timestamp", timestamp);
+
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << 0 << 1, QVector<int>() << NickListModel::ChannelPropertiesRole);
 }
 
 QString Nick2::getLoweredNickname() const
@@ -522,6 +534,8 @@ bool Nick2::isSecureConnection() const
 void Nick2::setSecureConnection(bool secure)
 {
     m_secureConnection = secure;
+
+    //emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << Qt::DecorationRole);
 }
 
 QString Nick2::getPrettyOnlineSince() const
@@ -562,6 +576,8 @@ void Nick2::updatePrettyInfo()
         info += i18n(" since %1", getPrettyOnlineSince());
 
     m_prettyInfo = info;
+
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << 3, QVector<int>() << Qt::DisplayRole);
 }
 
 int Nick2::getConnectionId() const
@@ -580,8 +596,9 @@ void Nick2::setNickname(const QString& newNickname)
     m_nick = newNickname;
     m_loweredNickname = newNickname.toLower();
 
-    emit channelPropertiesChanged(QString());
-    emit nickChanged(getNickname());
+    emit tooltipsChanged(QString());
+
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>(), QVector<int>() << Qt::DisplayRole << NickListModel::NickRole << NickListModel::LoweredNickRole);
 }
 
 void Nick2::setAway(bool state, const QString& awayMessage)
@@ -596,8 +613,9 @@ void Nick2::setAway(bool state, const QString& awayMessage)
 
 
     emit channelPropertiesChanged(QString());
-    emit nickChanged(getNickname());
     emit prettyInfoChanged();
+
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << 0 << 1, QVector<int>() << NickListModel::AwayRole);
 
     //TODO tell kpeople
 }
@@ -607,8 +625,11 @@ void Nick2::setIdentified(bool identified)
     if(m_identified == identified) return;
     m_identified = identified;
 
-    emit channelPropertiesChanged(QString());
-    emit nickChanged(getNickname());
+    emit tooltipsChanged(QString());
+
+    //TODO this should also change something for the nicksOnlineModel, it should show e.g. a red icon to alert the user
+    // that this nick could possibly not be who they're watching, but just someone using their nick.
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << 0, QVector<int>() << Qt::DisplayRole);
 }
 
 void Nick2::setAwayMessage(const QString& newMessage)
@@ -616,8 +637,7 @@ void Nick2::setAwayMessage(const QString& newMessage)
     if(m_awayMessage == newMessage) return;
     m_awayMessage = newMessage;
 
-    emit channelPropertiesChanged(QString());
-    emit nickChanged(getNickname());
+    emit tooltipsChanged(QString());
     emit prettyInfoChanged();
 }
 
@@ -626,9 +646,10 @@ void Nick2::setRealName(const QString& newRealName)
     if (newRealName.isEmpty() || m_realName == newRealName) return;
     m_realName = newRealName;
 
-    emit channelPropertiesChanged(QString());
-    emit nickChanged(getNickname());
+    emit tooltipsChanged(QString());
     emit prettyInfoChanged();
+
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << 0 << 2, QVector<int>() << Qt::DisplayRole);
 }
 
 void Nick2::setNetServer(const QString& newNetServer)
@@ -636,8 +657,6 @@ void Nick2::setNetServer(const QString& newNetServer)
     if (newNetServer.isEmpty() || m_netServer == newNetServer) return;
     m_netServer = newNetServer;
 
-    emit channelPropertiesChanged(QString());
-    emit nickChanged(getNickname());
     emit prettyInfoChanged();
 }
 
@@ -646,8 +665,6 @@ void Nick2::setNetServerInfo(const QString& newNetServerInfo)
     if (newNetServerInfo.isEmpty() || newNetServerInfo == m_netServerInfo) return;
     m_netServerInfo = newNetServerInfo;
 
-    emit channelPropertiesChanged(QString());
-    emit nickChanged(getNickname());
     emit prettyInfoChanged();
 }
 
@@ -656,9 +673,10 @@ void Nick2::setOnlineSince(const QDateTime& datetime)
     if (datetime.isNull() || datetime == m_onlineSince) return;
     m_onlineSince = datetime;
 
-    emit channelPropertiesChanged(QString());
-    emit nickChanged(getNickname());
+    emit tooltipsChanged(QString());
     emit prettyInfoChanged();
+
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>() << 3, QVector<int>() << Qt::DisplayRole);
 }
 
 QString Nick2::getBestPersonName() const
@@ -674,7 +692,6 @@ QString Nick2::getBestPersonName() const
     }
 }
 
-//FIXME what do these do and do they need to be available for each channel?
 void Nick2::setPrintedOnline(bool printed)
 {
     m_printedOnline = printed;

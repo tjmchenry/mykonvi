@@ -28,7 +28,8 @@ class ConnectionManager;
 typedef QHash<QString, Nick2*> NickHash;
 
 Q_DECLARE_METATYPE(NickHash);
-
+Q_DECLARE_METATYPE(ChannelHash*);
+Q_DECLARE_METATYPE(const ChannelHash*);
 
 class NickListModel : public QAbstractListModel
 {
@@ -38,7 +39,7 @@ class NickListModel : public QAbstractListModel
         explicit NickListModel(QObject *parent = 0);
         ~NickListModel();
 
-        enum Roles {NickRole = Qt::UserRole, HostmaskRole};
+        enum Roles {NickRole = Qt::UserRole, LoweredNickRole, HostmaskRole, LoweredHostmaskRole, AwayRole, ChannelPropertiesRole, ChannelsRole};
 
         void clear();
 
@@ -55,6 +56,11 @@ class NickListModel : public QAbstractListModel
 
         Nick2* getNick(int connectionId, const QString& nick);
 
+        bool isNickOnline(int connectionId, const QString& nick) const;
+        bool isNotifyNick(int cId, const QString& nick) const;
+        void setNewNickname(int connectionId, const QString& nick, const QString& newNick);
+        void setAllChannelNicksLessActive(int connectionId, const QString& channel);
+
         int columnCount(const QModelIndex& parent = QModelIndex()) const;
         int rowCount(const QModelIndex& parent = QModelIndex()) const;
         QPersistentModelIndex serverIndex(int connectionId);
@@ -68,37 +74,17 @@ class NickListModel : public QAbstractListModel
         QHash<int, QByteArray> roleNames() const;
         bool hasChildren(const QModelIndex& index) const;
 
-        bool isNickOnline(int connectionId, const QString& nick) const;
-        bool isNotifyNick(int cId, const QString& nick) const;
-        bool isNickIdentified(int connectionId, const QString& nick) const;
-        bool getNickSecureConnection(int connectionId, const QString& nick) const;
-        void setNickSecureConnection(int connectionId, const QString& nick, bool secure);
-        QStringList getNickChannels(int connectionId, const QString& nick) const;
-        bool isNickInChannel(int connectionId, const QString& channel, const QString& nick) const;
-        bool isNickAnyTypeOfOp(int connectionId, const QString& channel, const QString& nick) const;
-        QString getNickHostmask(int connectionId, const QString& nick) const;
-        void setNickHostmask(int connectionId, const QString& nick, const QString& hostmask);
-        void setNickRealName(int connectionId, const QString& nick, const QString& realName);
-        void setNewNickname(int connectionId, const QString& nick, const QString& newNick);
-        void setNickOnlineSince(int connectionId, const QString& nick, const QDateTime& onlineSince);
-        void setNickNetServer(int connectionId, const QString& nick, const QString& netServer);
-        void setNickNetServerInfo(int connectionId, const QString& nick, const QString& netServerInfo);
-        uint getNickActivity(int connectionId, const QString& channel, const QString& nick) const;
-        void setNickMoreActive(int connectionId, const QString& channel, const QString& nick);
-        void setAllChannelNicksLessActive(int connectionId, const QString& channel);
-        uint getNickTimestamp(int connectionId, const QString& channel, const QString& nick) const;
-        void setNickTimestamp(int connectionId, const QString& channel, const QString& nick, uint timestamp);
-        uint getNickStatusValue(int connectionId, const QString& channel, const QString& nick) const;
-
-        void setNickMode(int connectionId, const QString& channel, const QString& nick, char mode, bool state);
-        void setNickAway(int connectionId, const QString& nick, bool away, const QString& awayMessage = QString());
-        void setNickIdentified(int connectionId, const QString& nick, bool identified);
-
         void setHostmaskColumn(bool hostmask) { m_hostmask = hostmask; }
 
     signals:
         void nickOnline(int sgId, int connectionId, const QString& nick);
         void nickOffline(int sgId, int connectionId, Nick2* nick);
+
+    protected:
+        QStringList getSharedChannels(int connectionId, const QString& nick);
+
+    protected slots:
+        void slotNickChanged(int cId, const QString& nick, QVector<int> columnsChanged, QVector<int> rolesChanged);
 
     private:
         QHash<int, QList<Nick2*> > m_nickLists;
@@ -123,35 +109,35 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
         explicit ChannelNickListFilterModel(int connectionId, Channel* channel);
         ~ChannelNickListFilterModel();
 
+        enum Roles {ActivityRole = NickListModel::ChannelsRole + 1, /*ModesRole,*/ StatusValueRole, TimestampRole};
+
         QModelIndex serverIndex() const;
         QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const;
-
-        bool isNickInChannel(const QString& nick) const;
-        uint getNickTimestamp(const QString& nick) const;
 
         void insertNick(Nick2* item);
         void removeNick(const QString& nick);
         void removeAllNicks();
 
+        Nick2* getNick(const QString& nick);
+
         void setAllNicksLessActive();
 
         NickListModel* sourceNickModel() const;
 
-        bool nickTimestampLessThan(const Nick2* left, const Nick2* right) const;
-        bool nickLessThan(const Nick2* left, const Nick2* right) const;
-        bool nickHostmaskLessThan(const Nick2* left, const Nick2* right) const;
-        bool nickStatusLessThan(const Nick2* left, const Nick2* right) const;
-        bool nickActivityLessThan(const Nick2* left, const Nick2* right) const;
-
-        bool isNickAnyTypeOfOp(const QString& nick) const;
+        bool nickTimestampLessThan(const QModelIndex& left, const QModelIndex& right) const;
+        bool nickLessThan(const QModelIndex& left, const QModelIndex& right) const;
+        bool nickHostmaskLessThan(const QModelIndex& left, const QModelIndex& right) const;
+        bool nickStatusLessThan(const QModelIndex& left, const QModelIndex& right) const;
+        bool nickActivityLessThan(const QModelIndex& left, const QModelIndex& right) const;
 
     public slots:
         void nickCompletion(IRCInput* inputBar);
         void endNickCompletion();
 
     protected:
+        QVariant getProperty(const QModelIndex& sourceIndex, const QString& property) const;
         bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const;
-        bool lessThan(const QModelIndex& left, const QModelIndex& right) const;
+        bool lessThan(const QModelIndex& srcLeft, const QModelIndex& srcRight) const;
 
         QString completeNick(const QString& pattern, bool& complete, QStringList& found, bool skipNonAlfaNum, bool caseSensitive);
 

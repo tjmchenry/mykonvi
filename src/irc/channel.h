@@ -233,6 +233,8 @@ class Channel : public ChatWindow
         bool isNickInChannel(const QString& nick) const;
         bool isNickAnyTypeOfOp(const QString& nick) const;
         uint getNickTimestamp(const QString& nick) const;
+        Nick2* getNick(const QString& nick) const;
+        bool isNickOnline(const QString& nick) const;
 
     protected slots:
         void quickButtonClicked(const QString& definition);

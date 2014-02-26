@@ -347,7 +347,7 @@ void Query::setNick(Nick2* nick)
     Q_ASSERT(m_nick); if(!m_nick) return;
     nickChanged();
 
-    connect(m_nick, SIGNAL(nickChanged(QString)), this, SLOT(nickChanged()));
+    connect(m_nick, SIGNAL(nickChanged(int,QString,QVector<int>,QVector<int>)), this, SLOT(nickChanged()));
 }
 
 Nick2* Query::getNick()

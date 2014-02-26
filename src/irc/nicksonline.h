@@ -26,12 +26,10 @@
 
 #include "ui_nicksonlinepanelui.h"
 
-            //nick, patterns
+            //nick, nick object
 typedef QHash<QString, Nick2*> WatchedNicks;
-            //monitor type, watched nick
-typedef QHash<int, WatchedNicks> WatchedNickList;
             //connection id, watched nick list
-typedef QHash<int, WatchedNickList> WatchedNickConnections;
+typedef QHash<int, WatchedNicks> WatchedNickConnections;
             //server group id, watched nick connections
 typedef QHash<int, WatchedNickConnections> WatchedNickListHash;
 
@@ -60,12 +58,21 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
         void addNotifyNick(int sgId, const QString& nick);
         void updateNotifyConnection(int sgId, int cId);
 
-        void notifyResponse(int cId, const QString& newIson);
+        void isonResponse(int sgId, int cId, const QString& newIson);
+        void watchedNicksOnline(int sgId, int cId, const QStringList& onlineList);
+        void watchedNicksOffline(int sgId, int cId, const QStringList& offlineList);
+        void watchedNicksList(int sgId, int cId, int type, const QStringList& watchedList);
+        void endOfWatchedNicksList(int sgId, int cId, int type);
         void nickOnline(int sgId, int cId, const QString& nick);
         void nickOffline(int sgId, int cId, Nick2* nick);
 
         void slotRequestWhois(int cId, const QString& nick);
         void whoisReceived(int cId, const QString& nick);
+
+        void slotRequestWatchedNicksList(int cId, int type);
+        void watchedNicksListReceived(int sgId, int cId, int type);
+
+        void endOfISupport(int cId = -1, bool last = true);
 
     protected:
         bool lessThan(const QModelIndex& left, const QModelIndex& right) const;
@@ -74,22 +81,35 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
         int columnCount(const QModelIndex& parent = QModelIndex()) const;
 
         void removeNotifyNick(int sgId, int cId, const QString& nick);
+        void removeActivelyWatchedNick(int cId, const QString& nick);
         void addNotifyNick(int sgId, int cId, Nick2* nick);
         void replaceNotifyNick(int sgId, int cId, Nick2* nick);
-        bool isWatchTypeEmpty(int type) const;
         bool isNickWatched(int sgId, int cId, const QString& nick) const;
+        bool isNickActivelyWatched(int cId, const QString& nick) const;
+        bool isNickOnline(int cId, const QString& nick) const;
         bool isWatchedNickOnline(int sgId, int cId, const QString& nick) const;
 
+        Nick2* getNick(int cId, const QString& nick) const;
         QModelIndex getNotifyNickIndex(int sgId, const QString& nick) const;
 
+        void waitForISupport(int cId);
+        void addServerNotifyNicks(int cId);
+
+        void requestMonitor(int cId, const QStringList& nicks);
+        void requestWatch(int cId, const QStringList& nicks);
+        void requestIson(int cId, const QStringList& nicks);
+
     protected slots:
-        void isonCheck();
+        void notifyCheck();
         void slotNickChanged(int cId, const QString& nick, QVector<int> columnsChanged, QVector<int> rolesChanged);
 
     private:
         void updateMinimumRowHeight();
 
         int m_minimumRowHeight;
+
+        QHash<int, QHash<int, QStringList> > m_activelyWatchedNicks;
+        QHash<int, bool> m_notifyChanged;
 
         QHash<int, QStringList> m_isonList;
 
@@ -104,7 +124,8 @@ class NicksOnlineFilterModel : public QSortFilterProxyModel
         ConnectionManager* m_connectionManager;
 
         WatchedNickListHash m_watchedNicks;
-        QTimer* m_timer;
+        QTimer* m_notifyTimer;
+        QHash<int, QTimer*> m_iSupportTimerHash;
 };
 
 class NicksOnline : public ChatWindow, private Ui::NicksOnlineWidgetUI

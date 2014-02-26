@@ -54,9 +54,6 @@ void InputFilter::setServer(Server* newServer)
     Application* konvApp = static_cast<Application*>(kapp);
     m_nickListModel = konvApp->getConnectionManager()->getNickListModel();
     m_nicksOnlineModel = konvApp->getConnectionManager()->getNicksOnlineFilterModel();
-
-    connect(this, SIGNAL(notifyResponse(int, const QString&)), m_nicksOnlineModel, SLOT(notifyResponse(int, const QString&)));
-    connect(this, SIGNAL(endOfWhois(int, const QString&)), m_nicksOnlineModel, SLOT(whoisReceived(int, const QString&)));
 }
 
 /*
@@ -1005,11 +1002,37 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                                     m_server->setTopicLength(topicLength);
                             }
                         }
+                        else if (property == "WATCH")
+                        {
+                            if (!value.isEmpty())
+                            {
+                                bool ok = false;
+                                int maxNicks = value.toInt(&ok);
+
+                                if (ok)
+                                    m_server->setWatchTypeSupport(property, maxNicks);
+                            }
+                        }
+                        else if (property == "MONITOR")
+                        {
+                            if (!value.isEmpty())
+                            {
+                                bool ok = false;
+                                int maxNicks = value.toInt(&ok);
+
+                                if (ok)
+                                {
+                                    m_server->setWatchTypeSupport(property, maxNicks);
+                                }
+                            }
+                        }
                         else
                         {
                             //kDebug() << "Ignored server-capability: " << property << " with value '" << value << "'";
                         }
                     }                                 // endfor
+
+                    emit endOfISupport(m_connectionId, false);
                 }
                 break;
             }
@@ -1437,13 +1460,285 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 }
                 break;
             }
+            // ISON
             case RPL_ISON:
             {
                 if (plHas(2))
                 {
                     // Tell nicksonline about the most recent ISON report
-                    emit notifyResponse(m_connectionId, trailing);
+                    emit isonResponse(m_serverGroupId, m_connectionId, trailing);
+
+                    //TODO if automatic get the original output, list nicks we got as online, nicks we didn't as offlin
                 }
+
+                break;
+            }
+            // WATCH
+            // Nick is no longer watched
+            // 602 <sourceNick> <targetNick> <targetNickIdent> <hostmask> <time you stopped watching?> :stopped watching
+            // 602 Sho_ hein ~sho@kde/hein 1389372935 :stopped watching
+            case RPL_WATCHOFF:
+            {
+                if (plHas(5))
+                {
+                    //if an automated request tell the user
+                    if (getAutomaticRequest("WATCH -", parameterList.value(1)) == 0)
+                    {
+                        emit serverFrontmostMessage(i18n("Watch"), i18n("You have stopped watching %1.", parameterList.value(1)));
+                    }
+                    //if not ignore
+                }
+
+                break;
+            }
+            // Tells you how many people are in your list, and how many lists you are in
+            // 603 <sourceNick> You have <number of watched nicks> and are on <num> WATCH entries
+            // 603 word :You have 1 and are on 0 WATCH entries
+            case RPL_WATCHSTAT:
+            {
+                if (trailing.count(' ') > 6)
+                {
+                    bool ok1 = false;
+                    bool ok2 = false;
+
+                    int mine = trailing.section(' ', 2).toInt(&ok1);
+                    int other = trailing.section(' ', 6).toInt(&ok2);
+
+                    if (ok1 && ok2)
+                        emit serverFrontmostMessage(i18n("Watch"), QString(i18np("You are watching %1 nick ", "You are watching %1 nicks ", mine) +
+                                                    i18np("and are on %1 Watch list", "and are on %1 Watch lists", other)));
+                }
+
+                break;
+            }
+            // 604 <sourceNick> <targetNick> <targetNickIdent> <hostmask> <onlineSince> : is online
+            // 604 word Sho_ hein ~sho@kde/hein 1389372935 :is online
+            case RPL_NOWON: // tells you a nick you just added to the list is logged in
+            case RPL_LOGON: // tells you a nick had just logged in
+            {
+                if (plHas(5))
+                {
+                    QStringList onlineList = QStringList(parameterList.join(" ").section(' ', 1));
+
+                    emit watchedNicksOffline(m_serverGroupId, m_connectionId, onlineList);
+
+                    if (getAutomaticRequest("WATCH +", parameterList.value(1)) == 0)
+                            emit serverFrontmostMessage(i18n("Watch"), i18n("%1 went online", parameterList.value(1)));
+                }
+
+                break;
+            }
+            // 605 <sourceNick> <targetNick> <targetNickIdent> <hostmask> <onlineSince> :is offline
+            // 605 word Sho_ * * 0 :is offline
+            case RPL_NOWOFF: // tells you a nick you just added to the list is not logged in
+            case RPL_LOGOFF: // tells you a nick had logged off
+            {
+                if (plHas(5))
+                {
+                    QStringList offlineList = QStringList(parameterList.join(" ").section(' ', 1));
+
+                    emit watchedNicksOnline(m_serverGroupId, m_connectionId, offlineList);
+
+                    if (getAutomaticRequest("WATCH +", parameterList.value(1)) == 0)
+                            emit serverFrontmostMessage(i18n("Watch"), i18n("%1 went offline", parameterList.value(1)));
+                }
+
+                break;
+            }
+            // Gives you a list of all the nicks you are watching, triggered by WATCH S/s
+            case RPL_WATCHLIST:
+            {
+                if (!trailing.isEmpty())
+                {
+                    QStringList watchedNicks = trailing.split(' ', QString::SkipEmptyParts);
+
+                    emit watchedNicksList(m_serverGroupId, m_connectionId, 1, watchedNicks);
+
+                    //TODO what's the proper string here? 'your watched nicks' would appear on each line of nicks (if there were enough nicks)
+                    // Should there be no string at all?
+                    if (getAutomaticRequest("WATCH S", parameterList.value(1)) == 0 || getAutomaticRequest("WATCH s", parameterList.value(1)) == 0)
+                            emit serverFrontmostMessage(i18n("Watch"), i18n("Your watched nicks: %1", watchedNicks.join(", ")));
+                }
+
+                break;
+            }
+            // The end of the list of all the nicks you are watching
+            case RPL_ENDOFWATCHLIST:
+            {
+                if (trailing.count(' ') > 2)
+                {
+                    QString listType = trailing.section(' ', 3);
+
+                    // Note: l provides an RPL_NOWON for each online watched nick, L provides an RPL_NOWON/NOWOFF for all watched nicks
+                    if (listType.toLower().startsWith("s"))
+                    {
+                        emit endOfWatchedNicksList(m_serverGroupId, m_connectionId, 1);
+                    }
+
+                    if (getAutomaticRequest("WATCH L", parameterList.value(1)) == 0 || getAutomaticRequest("WATCH l", parameterList.value(1)) == 0)
+                            emit serverFrontmostMessage(i18n("Watch"), i18n("End of Watch list"));
+                    else if (getAutomaticRequest("WATCH s", parameterList.value(1)) == 0 || getAutomaticRequest("WATCH S", parameterList.value(1)) == 0)
+                            emit serverFrontmostMessage(i18n("Watch"), i18n("End of Watch stats"));
+
+                }
+
+                break;
+            }
+            // Failed to add latest watched nick, too many.
+            // Is returned once per nick added over limit
+            // Could also be ERR_NOSUCHGLINE, so make sure it matches ours exactly.
+            // 512 someguy :Maximum size for WATCH-list is 128 entries
+            case ERR_TOOMANYWATCH:
+            {
+                if (plHas(1) && trailing.startsWith("Maximum size for Watch-list is "))
+                {
+                    bool ok = false;
+                    uint limit = trailing.section(' ', 5).toUInt(&ok);
+
+                    if (ok)
+                    {
+                        emit watchedNicksListFull(m_serverGroupId, m_connectionId, 1, limit, QStringList(parameterList.at(0)));
+
+                        if (getAutomaticRequest("WATCH +", parameterList.value(1)) == 0)
+                            emit serverFrontmostMessage(i18n("Error"), i18np("Maximum size for the Watch list is %1 entry", "Maximum size for the Watch list is %1 entries", limit));
+                    }
+                }
+
+                break;
+            }
+            // MONITOR
+            // A nick you are watching, or have just watched, is online
+            // 730 <sourcenick> :<targetNick>!<hostmask>[,<targetNick2>!<hostmask>]
+            // <sourceNick> can be substituted by the server for '*' so that the server can send the same message
+            // to all clients watching this nick. This usually occurs with logons and logoffs, not when the nicks are added.
+            // 730 word :Sho_!~sho@kde/hein,Keshl!~Purple@256.256.256.256.isp.net
+            // 730 * :Sho_!sho@kde/hein
+            case RPL_MONONLINE:
+            {
+                if (plHas(1))
+                {
+                    QStringList onlineList = trailing.split(',', QString::SkipEmptyParts);
+
+                    if (!onlineList.isEmpty())
+                    {
+                        emit watchedNicksOnline(m_serverGroupId, m_connectionId, onlineList);
+
+                        QStringList messageList = QStringList();
+
+                        QStringList::const_iterator i;
+                        for (i = onlineList.constBegin(); i != onlineList.constEnd(); ++i)
+                        {
+                            if (getAutomaticRequest("MONITOR +", (*i).section('!', 0, 0)) == 0)
+                                messageList.append((*i).section('!', 0, 0));
+                        }
+
+                        if (!messageList.isEmpty())
+                            emit serverFrontmostMessage(i18n("Monitor"), i18np("%1 went online (%2)", "The following nicks are now online: %1 (%2)", messageList.join(", "), m_server->getServerName(), messageList.count()));
+                    }
+                }
+
+                break;
+            }
+            // A nick you are watching, or have just watched, is offline
+            // 731 <sourceNick> :<targetNick>[,<targetNick2>]
+            // 731 word :Sho_
+            // 731 * :Sho_
+            case RPL_MONOFFLINE:
+            {
+                if (plHas(1))
+                {
+                    QStringList offlineList = trailing.split(',', QString::SkipEmptyParts);
+
+                    if (!offlineList.isEmpty())
+                    {
+                        emit watchedNicksOffline(m_serverGroupId, m_connectionId, offlineList);
+
+                        QStringList messageList = QStringList();
+
+                        QStringList::const_iterator i;
+                        for (i = offlineList.constBegin(); i != offlineList.constEnd(); ++i)
+                        {
+                            if (getAutomaticRequest("MONITOR +", (*i)) == 0)
+                                messageList.append(*i);
+                        }
+
+                        if (!messageList.isEmpty())
+                            emit serverFrontmostMessage(i18n("Monitor"), i18np("%1 went offline (%2)", "The following nicks are now offline: %1 (%2)", messageList.join(", "), m_server->getServerName(), messageList.count()));
+                    }
+                }
+
+                break;
+            }
+            // Gives a list of the nicks you are monitoring
+            // 732 <sourceNick> :<watchedNick>[,<watchedNick2>]
+            // 732 word :Keshl,Sho_
+            case RPL_MONLIST:
+            {
+                if (plHas(1))
+                {
+                    QStringList monitorList = trailing.split(',', QString::SkipEmptyParts);
+
+                    if (!monitorList.isEmpty())
+                    {
+                        emit watchedNicksList(m_serverGroupId, m_connectionId, 0, monitorList);
+
+                        if (getAutomaticRequest("MONITOR L", parameterList.at(0)) == 0)
+                            emit serverFrontmostMessage(i18n("Monitor"), i18np("This nick is in your Monitor list: %1", "The following nicks are in your Monitor list: %1", monitorList.join(", "), monitorList.count()));
+                    }
+                }
+
+                break;
+            }
+            // End of the list of nicks you are monitoring
+            // 733 <sourceNick> :End of MONITOR list
+            // 733 word :End of MONITOR list
+            case RPL_ENDOFMONLIST:
+            {
+                if (plHas(1))
+                {
+                    emit endOfWatchedNicksList(m_serverGroupId, m_connectionId, 0);
+
+                    if (getAutomaticRequest("MONITOR L", parameterList.value(0)) == 0)
+                            emit serverFrontmostMessage(i18n("Monitor"), i18n("End of Monitor list"));
+                }
+
+                break;
+            }
+            // Error for when the monitor list is full
+            // 734 <sourceNick> <limit> <targetNick>[,<targetNick2>] :Monitor list is full.
+            // 734 word 100 PovAddictW :Monitor list is full.
+            case ERR_MONLISTFULL:
+            {
+                if (plHas(3))
+                {
+                    QStringList unwatchedNicks = QStringList();
+
+                    for (int i = 2; i < parameterList.count(); i++)
+                        unwatchedNicks.append(parameterList.at(i));
+
+                    bool ok = false;
+                    int entries = parameterList.at(1).toInt(&ok);
+
+                    if (ok)
+                    {
+                        emit watchedNicksListFull(m_serverGroupId, m_connectionId, 0, entries, unwatchedNicks);
+
+                        QStringList messageList = QStringList();
+
+                        QStringList::const_iterator i;
+
+                        for (i = unwatchedNicks.constBegin(); i != unwatchedNicks.constEnd(); ++i)
+                        {
+                            if (getAutomaticRequest("MONITOR +", (*i)) == 0)
+                                messageList.append(*i);
+                        }
+
+                        if (!messageList.isEmpty())
+                            emit serverFrontmostMessage(i18n("Error"), QString(i18np("Maximum size for the Monitor list is %1 entry.", "Maximum size for the Monitor list is %1 entries", entries) +
+                            i18np("%1 was not added to the Monitor list.", "The following nicks were not added to the Monitor list: %1", messageList.join(", "), messageList.count())));
+                    }
+                }
+
                 break;
             }
             case RPL_AWAY:
@@ -1484,8 +1779,11 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
             //[19:11] :zahn.freenode.net 311 PhantomsDad psn ~psn h106n2fls23o1068.bredband.comhem.se * :Peter Simonsson
             //[19:11] :zahn.freenode.net 319 PhantomsDad psn :#kde-devel #koffice
             //[19:11] :zahn.freenode.net 312 PhantomsDad psn irc.freenode.net :http://freenode.net/
+            //[19:11] :zahn.freenode.net 671 PhantomsDad psn :is using a secure connection
+            //[19:11] :zahn.freenode.net 378 PhantomsDad psn :is connecting from <truehostmask> <ip address>
             //[19:11] :zahn.freenode.net 301 PhantomsDad psn :away
             //[19:11] :zahn.freenode.net 320 PhantomsDad psn :is an identified user
+            //[19:11] :zahn.freenode.net 330 PhantomsDad psn psn :is logged in as
             //[19:11] :zahn.freenode.net 317 PhantomsDad psn 4921 1074973024 :seconds idle, signon time
             //[19:11] :zahn.freenode.net 318 PhantomsDad psn :End of /WHOIS list.
             case RPL_WHOISUSER:
@@ -1565,6 +1863,7 @@ void InputFilter::parseServerCommand(const QString &prefix, const QString &comma
                 break;
             }
             // From a WHOIS.
+            //[19:11] :zahn.freenode.net 330 PhantomsDad psn psn :is logged in as
             //[19:11] :zahn.freenode.net 320 PhantomsDad psn :is an identified user
             case RPL_WHOISIDENTIFY:
             case RPL_IDENTIFIED:

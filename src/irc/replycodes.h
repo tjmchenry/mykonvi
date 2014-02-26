@@ -158,7 +158,23 @@
 #define ERR_UMODEUNKNOWNFLAG   501
 #define ERR_USERSDONTMATCH     502
 
+#define ERR_TOOMANYWATCH       512
+#define RPL_LOGON              600
+#define RPL_LOGOFF             601
+#define RPL_WATCHOFF           602
+#define RPL_WATCHSTAT          603
+#define RPL_NOWON              604
+#define RPL_NOWOFF             605
+#define RPL_WATCHLIST          606
+#define RPL_ENDOFWATCHLIST     607
+
 #define RPL_WHOISSECURE        671 // used by UnrealIRCd to denote SSL in WHOIS response
+
+#define RPL_MONONLINE          730
+#define RPL_MONOFFLINE         731
+#define RPL_MONLIST            732
+#define RPL_ENDOFMONLIST       733
+#define ERR_MONLISTFULL        734
 
 #define RPL_LOGGEDIN           900
 #define RPL_LOGGEDOUT          901

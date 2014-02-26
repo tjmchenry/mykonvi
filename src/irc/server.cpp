@@ -335,6 +335,10 @@ void Server::connectSignals()
         this,SLOT(invitation(QString,QString)) );
     connect(&m_inputFilter, SIGNAL(addToChannelList(QString,int,QString)),
         this, SLOT(addToChannelList(QString,int,QString)));
+    connect(&m_inputFilter, SIGNAL(serverStatusMessage(QString,QString)),
+        this, SLOT(appendStatusMessage(QString,QString)));
+    connect(&m_inputFilter, SIGNAL(serverFrontmostMessage(QString,QString)),
+        this, SLOT(appendMessageToFrontmost(QString,QString)));
 
     // Status View
     connect(this, SIGNAL(serverOnline(bool)), getStatusView(), SLOT(serverOnline(bool)));
@@ -525,6 +529,16 @@ void Server::setChanModes(const QString& modes)
 {
     QStringList abcd = modes.split(',');
     m_banAddressListModes = abcd.value(0);
+}
+
+void Server::setWatchTypeSupport(const QString& type, int max)
+{
+    m_watchTypes.insert(type, max);
+}
+
+QHash<QString, int> Server::getWatchTypeSupport() const
+{
+    return m_watchTypes;
 }
 
 // return a nickname without possible mode character at the beginning

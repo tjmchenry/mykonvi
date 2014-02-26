@@ -50,7 +50,20 @@ class InputFilter : public QObject
 
     signals:
         void welcome(const QString& ownHost);
-        void notifyResponse(int connectionId, const QString &nicksOnline);
+
+        void serverStatusMessage(const QString& type, const QString& message);
+        void serverFrontmostMessage(const QString& type, const QString& message);
+        void isonResponse(int sgId, int cId, const QString &nicksOnline);
+        void watchedNicksOnline(int sgId, int cId, const QStringList& onlineNicks);
+        void watchedNicksOffline(int sId, int cId, const QStringList& offlineNicks);
+        void watchedNicksList(int sgId, int cId, int type, const QStringList& watchedNicks);
+        void endOfWatchedNicksList(int sgId, int cId, int type);
+
+        // Bool is used to indicate if we can be certain if this is the last RPL_ISUPPORT line coming in
+        // meaning we could be sure that we have gathered all properties.
+        void endOfISupport(int cId, bool last);
+
+        void watchedNicksListFull(int sgId, int cid, int type, int limit, const QStringList& unWatchedNicks);
                                                   // will be connected to Server::startReverseDccSendTransfer()
         void startReverseDccSendTransfer(const QString &sourceNick, const QStringList &dccArgument);
                                                   // will be connected to Server::startReverseDccChat()

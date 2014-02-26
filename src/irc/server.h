@@ -152,6 +152,9 @@ class Server : public QObject
         void setModesCount(int count);
         int getModesCount();
 
+        void setWatchTypeSupport(const QString& type, int max);
+        QHash<QString, int> getWatchTypeSupport() const;
+
         // extended user modes support
         void setChanModes(const QString&);                 //grab modes types from RPL_ISUPPORT CHANMODES
         QString banAddressListModes() { return m_banAddressListModes; }     // aka "TYPE A" modes http://tools.ietf.org/html/draft-brocklesby-irc-isupport-03#section-3.3
@@ -176,8 +179,7 @@ class Server : public QObject
         void appendServerMessageToChannel(const QString& channel, const QString& type, const QString& message);
         void appendCommandMessageToChannel(const QString& channel, const QString& command, const QString& message,
                                            bool highlight = true, bool parseURL = true);
-        void appendStatusMessage(const QString& type,const QString& message);
-        void appendMessageToFrontmost(const QString& type,const QString& message, bool parseURL = true);
+
 
         int getPreLength(const QString& command, const QString& dest);
 
@@ -401,6 +403,8 @@ class Server : public QObject
 
         void announceWatchedNickOnline(const QString& nickname);
         void announceWatchedNickOffline(const QString& nickname);
+        void appendStatusMessage(const QString& type,const QString& message);
+        void appendMessageToFrontmost(const QString& type,const QString& message, bool parseURL = true);
 
         /// Called when the system wants to close the connection due to network going down etc.
         void involuntaryQuit();
@@ -511,6 +515,8 @@ class Server : public QObject
 
         QString m_channelPrefixes;                  // prefixes that indicate channel names. defaults to RFC1459 "#&"
         int m_modesCount;                           // Maximum number of channel modes with parameter allowed per MODE command.
+
+        QHash<QString, int> m_watchTypes;
 
         bool m_autoJoin;
 

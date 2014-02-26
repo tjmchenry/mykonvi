@@ -37,12 +37,12 @@ NicksOnlineFilterModel::NicksOnlineFilterModel(QObject* parent) : QSortFilterPro
     m_onlineIcon = KIcon("im-user");
     m_offlineIcon = KIcon("im-user-offline");
 
-    m_timer = new QTimer();
-    m_timer->setSingleShot(true);
+    m_notifyTimer = new QTimer();
+    m_notifyTimer->setSingleShot(true);
 
     updateMinimumRowHeight();
 
-    connect(m_timer, SIGNAL(timeout()), this, SLOT(isonCheck()));
+    connect(m_notifyTimer, SIGNAL(timeout()), this, SLOT(notifyCheck()));
     connect(m_connectionManager, SIGNAL(connectedServerGroupsChanged(int,int)), this, SLOT(updateNotifyConnection(int,int)));
     //TODO get these signals from input filter instead
     connect(m_nickListModel, SIGNAL(nickOnline(int,int,QString)), this, SLOT(nickOnline(int,int,QString)));
@@ -302,17 +302,12 @@ void NicksOnlineFilterModel::whoisReceived(int cId, const QString& nick)
             m_whoisRequested.remove(cId, nick);
 }
 
-void NicksOnlineFilterModel::notifyResponse(int cId, const QString& newIson)
+void NicksOnlineFilterModel::isonResponse(int cId, int sgId, const QString& newIson)
 {
-    QStringList newIsonList = newIson.split(' ', QString::SkipEmptyParts);
-
-    Server* server = m_connectionManager->getServerByConnectionId(cId);
-    int sgId = -1;
-
-    if (server->getServerGroup())
-        sgId = server->getServerGroup()->id();
-    else
+    if (sgId < 0)
         return;
+
+    QStringList newIsonList = newIson.split(' ', QString::SkipEmptyParts);
 
     if (!m_isonList.contains(cId) || m_isonList[cId] != newIsonList)
     {
@@ -337,11 +332,104 @@ void NicksOnlineFilterModel::notifyResponse(int cId, const QString& newIson)
         m_isonList.insert(cId, newIsonList);
     }
 
-    m_timer->start(Preferences::self()->notifyDelay() * 1000);
+    m_notifyTimer->start(Preferences::self()->notifyDelay() * 1000);
+}
+
+void NicksOnlineFilterModel::watchedNicksOnline(int sgId, int cId, const QStringList& onlineList)
+{
+    for (int i = 0; i < onlineList.count(); i++)
+    {
+        QString nick;
+        QString hostmask = QString();
+        QString onlineSince = QString();
+        if (onlineList.at(i).contains(' ') && onlineList.at(i).count(' ') > 3)
+        {
+            nick = onlineList.at(i).section(' ', 0, 0);
+            hostmask = onlineList.at(i).section(' ', 2, 2);
+            onlineSince = onlineList.at(i).section(' ', 3, 3);
+        }
+        else if (onlineList.at(i).contains('!'))
+        {
+            nick = onlineList.at(i).section('!', 0, 0);
+            hostmask = onlineList.at(i).section('!', 1, 1);
+        }
+        else
+            nick = onlineList.at(i);
+
+        nickOnline(sgId, cId, nick);
+
+        if (isNickOnline(cId, nick))
+        {
+            if (!hostmask.isEmpty())
+                getNick(cId, nick)->setHostmask(hostmask);
+
+            if (!onlineSince.isEmpty())
+            {
+                bool ok = false;
+                QDateTime signonTime;
+                uint online = onlineSince.toUInt(&ok);
+
+                if (ok)
+                {
+                    signonTime.setTime_t(online);
+                    getNick(cId, nick)->setOnlineSince(signonTime);
+                }
+            }
+        }
+    }
+}
+
+void NicksOnlineFilterModel::watchedNicksOffline(int sgId, int cId, const QStringList& offlineList)
+{
+    for (int i = 0; i < offlineList.count(); i++)
+    {
+        // If the nick isn't online then the user should have already been informed of the change
+        // so we do nothing.
+        if (isNickOnline(cId, offlineList.at(i)))
+            nickOffline(sgId, cId, getNick(cId, offlineList.at(i)));
+    }
+}
+
+void NicksOnlineFilterModel::slotRequestWatchedNicksList(int cId, int type)
+{
+    Server* server = m_connectionManager->getServerByConnectionId(cId);
+
+    if (server && !server->getWatchTypeSupport().isEmpty())
+    {
+        if (server->getWatchTypeSupport().contains("MONITOR"))
+        {
+            server->queue("MONITOR L", Server::LowPriority);
+        }
+
+        if (server->getWatchTypeSupport().contains("WATCH"))
+        {
+            server->queue("WATCH L", Server::LowPriority);
+        }
+    }
+}
+
+void NicksOnlineFilterModel::watchedNicksListReceived(int sgId, int cId, int type)
+{
+    Q_UNUSED(sgId);
+}
+
+void NicksOnlineFilterModel::watchedNicksList(int sgId, int cId, int type, const QStringList& monitorList)
+{
+    // in case the user has watched nicks on their own, that are in the notify list, before turning on the notify list
+    // we need to make sure that 1) we don't send unescessary watch commands and 2) we verify the status of already watched nicks
+}
+
+void NicksOnlineFilterModel::endOfWatchedNicksList(int sgId, int cId, int type)
+{
+    // start watching nicks that aren't being watched
+    // delete the temporary watched list
 }
 
 void NicksOnlineFilterModel::nickOnline(int sgId, int cId, const QString& nick)
 {
+    if (sgId < 0)
+        return;
+
     if (Preferences::serverGroupHash().contains(sgId))
     {
         QStringList notifyList = Preferences::serverGroupById(sgId)->notifyList();
@@ -359,6 +447,7 @@ void NicksOnlineFilterModel::nickOnline(int sgId, int cId, const QString& nick)
             else if(isNickWatched(sgId, cId, nick)) // Nick is watched and previously offline
             {
                 getWatchedNick(sgId, cId, nick)->setPrintedOnline(true);
+
                 m_connectionManager->getServerByConnectionId(cId)->announceWatchedNickOnline(nick);
             }
             else if (m_nickListModel->isNickOnline(cId, nick)) // Nick is not watched, and is now online
@@ -429,13 +518,27 @@ bool NicksOnlineFilterModel::isNickWatched(int sgId, int cId, const QString& nic
 {
     QString lcNick = nick.toLower();
 
-    if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId) && 
-        ((m_watchedNicks[sgId][cId].contains(0) && m_watchedNicks[sgId][cId][0].contains(lcNick)) ||
-        (m_watchedNicks[sgId][cId].contains(1) && m_watchedNicks[sgId][cId][1].contains(lcNick)) ||
-        (m_watchedNicks[sgId][cId].contains(2) && m_watchedNicks[sgId][cId][2].contains(lcNick))))
+    if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId) &&  m_watchedNicks[sgId][cId].contains(lcNick))
         return true;
 
     return false;
+}
+
+bool NicksOnlineFilterModel::isNickActivelyWatched(int cId, const QString& nick) const
+{
+    QString addNick = "+" + nick;
+    if (m_activelyWatchedNicks.contains(cId) &&
+        ((m_activelyWatchedNicks[cId].contains(0) && (m_activelyWatchedNicks[cId][0].contains(nick) || m_activelyWatchedNicks[cId][0].contains(addNick))) ||
+        (m_activelyWatchedNicks[cId].contains(1) && (m_activelyWatchedNicks[cId][1].contains(nick) || m_activelyWatchedNicks[cId][1].contains(addNick))) ||
+        (m_activelyWatchedNicks[cId].contains(2) && m_activelyWatchedNicks[cId][2].contains(nick))))
+        return true;
+
+    return false;
+}
+
+bool NicksOnlineFilterModel::isNickOnline(int cId, const QString& nick) const
+{
+    return m_nickListModel->isNickOnline(cId, nick) || isWatchedNickOnline(cId, nick);
 }
 
 bool NicksOnlineFilterModel::isWatchedNickOnline(int cId, const QString& nick) const
@@ -452,13 +555,23 @@ bool NicksOnlineFilterModel::isWatchedNickOnline(int sgId, int cId, const QStrin
 {
     QString lcNick = nick.toLower();
 
-    if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId) &&
-        (((m_watchedNicks[sgId][cId].contains(0) && m_watchedNicks[sgId][cId][0].contains(lcNick)) && m_watchedNicks[sgId][cId][0][lcNick]->getPrintedOnline()) ||
-        ((m_watchedNicks[sgId][cId].contains(1) && m_watchedNicks[sgId][cId][1].contains(lcNick)) && m_watchedNicks[sgId][cId][1][lcNick]->getPrintedOnline()) ||
-        ((m_watchedNicks[sgId][cId].contains(2) && m_watchedNicks[sgId][cId][2].contains(lcNick)) && m_watchedNicks[sgId][cId][2][lcNick]->getPrintedOnline())))
-        return true;
+    if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId) && m_watchedNicks[sgId][cId].contains(lcNick))
+        return m_watchedNicks[sgId][cId][lcNick]->getPrintedOnline();
 
     return false;
+}
+
+Nick2* NicksOnlineFilterModel::getNick(int cId, const QString& nick) const
+{
+    if (isNickOnline(cId, nick))
+    {
+        if (m_nickListModel->isNickOnline(cId, nick))
+            return m_nickListModel->getNick(cId, nick);
+        else
+            return getWatchedNick(cId, nick);
+    }
+
+    return NULL;
 }
 
 Nick2* NicksOnlineFilterModel::getWatchedNick(int cId, const QString& nick) const
@@ -481,12 +594,8 @@ Nick2* NicksOnlineFilterModel::getWatchedNick(int sgId, int cId, const QString& 
     {
         QString lcNick = nick.toLower();
 
-        if (m_watchedNicks[sgId][cId][0].contains(lcNick))
-            return m_watchedNicks[sgId][cId][0][lcNick];
-        else if (m_watchedNicks[sgId][cId][1].contains(lcNick))
-            return m_watchedNicks[sgId][cId][1][lcNick];
-        else if (m_watchedNicks[sgId][cId][2].contains(lcNick))
-            return m_watchedNicks[sgId][cId][2][lcNick];
+        if (m_watchedNicks[sgId][cId].contains(lcNick))
+            return m_watchedNicks[sgId][cId][lcNick];
     }
 
     return NULL;
@@ -499,20 +608,10 @@ void NicksOnlineFilterModel::replaceNotifyNick(int sgId, int cId, Nick2* nick)
         QString lcNick = nick->getLoweredNickname();
         Nick2* oldNick;
 
-        if (m_watchedNicks[sgId][cId][0].contains(lcNick))
+        if (m_watchedNicks[sgId][cId].contains(lcNick))
         {
-            oldNick = m_watchedNicks[sgId][cId][0][lcNick];
-            m_watchedNicks[sgId][cId][0][lcNick] = nick;
-        }
-        else if (m_watchedNicks[sgId][cId][1].contains(lcNick))
-        {
-            oldNick = m_watchedNicks[sgId][cId][1][lcNick];
-            m_watchedNicks[sgId][cId][1][lcNick] = nick;
-        }
-        else if (m_watchedNicks[sgId][cId][2].contains(lcNick))
-        {
-            oldNick = m_watchedNicks[sgId][cId][2][lcNick];
-            m_watchedNicks[sgId][cId][2][lcNick] = nick;
+            oldNick = m_watchedNicks[sgId][cId][lcNick];
+            m_watchedNicks[sgId][cId][lcNick] = nick;
         }
 
         if (oldNick)
@@ -551,45 +650,56 @@ void NicksOnlineFilterModel::addNotifyNick(int sgId, int cId, Nick2* nick)
     if (nick->isInAnyChannel())
         return;
 
-    //TODO figure out a way to check and see if MONITOR/WATCH/ISON are supported and prefer them in that order
     bool monitor = false;
-    int mCount = 10;
+    int mCount = 0;
     bool watch = false;
-    int wCount = 10;
+    int wCount = 0;
     int type = 2;
 
-        // monitor is supported AND (there are no nicks for this servergroup yet AND monitor supports at least 1) OR
-    if (monitor && ((!m_watchedNicks.contains(sgId) && mCount > 0) || 
-        // (there are no nicks for this connection ID yet AND monitor supports at least 1) OR
-        (!m_watchedNicks[sgId].contains(cId) && mCount > 0) ||
+    Server* server = m_connectionManager->getServerByConnectionId(cId);
+
+    if (server && !server->getWatchTypeSupport().isEmpty())
+    {
+        QHash<QString, int> watchTypes = server->getWatchTypeSupport();
+
+        if (watchTypes.contains("MONITOR"))
+        {
+            monitor = true;
+            mCount = watchTypes["MONITOR"];
+        }
+
+        if (watchTypes.contains("WATCH"))
+        {
+            watch = true;
+            wCount = watchTypes["WATCH"];
+        }
+    }
+
+
+        // monitor is supported AND (there are no nicks for this connection id yet AND monitor supports at least 1) OR
+    if (monitor && ((!m_activelyWatchedNicks.contains(cId) && mCount > 0) ||
+        // (there are no nicks for monitor yet AND monitor supports at least 1) OR
+       (!m_activelyWatchedNicks[cId].contains(0) && mCount > 0) ||
         // (there are nicks for this connection id AND monitor supports more nicks then are currently there)
-        (m_watchedNicks[sgId].contains(cId) && mCount > m_watchedNicks[sgId][cId][0].count()))) // using [key] creates the index, but in this case that is fine
+       (m_activelyWatchedNicks[cId].contains(0) && mCount > m_activelyWatchedNicks[cId][0].count()))) // using [key] creates the index, but in this case that is fine
     {
         type = 0;
     }
-    else if (watch && ((!m_watchedNicks.contains(sgId) && wCount > 0) || 
-        (!m_watchedNicks[sgId].contains(cId) && wCount > 0) ||
-        (m_watchedNicks[sgId].contains(cId) && wCount > m_watchedNicks[sgId][cId][1].count())))
+    else if (watch && ((!m_activelyWatchedNicks.contains(cId) && wCount > 0) ||
+            (!m_activelyWatchedNicks[cId].contains(1) && wCount > 0) ||
+            (m_activelyWatchedNicks[cId].contains(1) && wCount > m_activelyWatchedNicks[cId][1].count())))
     {
         type = 1;
     }
 
-    //TODO send the MONITOR command to the server
     //MONITOR + target[,target2]*
-
-    //TODO send the WATCH command to the server
     //WATCH +target[ +target2]
-
-    Server* server = m_connectionManager->getServerByConnectionId(cId);
-
     if (!m_watchedNicks.contains(sgId))
     {
         WatchedNicks wNicks = WatchedNicks();
         wNicks.insert(nick->getLoweredNickname(), nick);
-        WatchedNickList wNickList = WatchedNickList();
-        wNickList.insert(type, wNicks);
         WatchedNickConnections wConnections = WatchedNickConnections();
-        wConnections.insert(cId, wNickList);
+        wConnections.insert(cId, wNicks);
 
         m_watchedNicks.insert(sgId, wConnections);
     }
@@ -597,32 +707,28 @@ void NicksOnlineFilterModel::addNotifyNick(int sgId, int cId, Nick2* nick)
     {
         WatchedNicks wNicks = WatchedNicks();
         wNicks.insert(nick->getLoweredNickname(), nick);
-        WatchedNickList wNickList = WatchedNickList();
-        wNickList.insert(type, wNicks);
 
-        m_watchedNicks[sgId].insert(cId, wNickList);
+        m_watchedNicks[sgId].insert(cId, wNicks);
     }
-    else if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId) && !m_watchedNicks[sgId][cId].contains(type))
+    else if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId))
     {
-        WatchedNicks wNicks = WatchedNicks();
-        wNicks.insert(nick->getLoweredNickname(), nick);
-
-        m_watchedNicks[sgId][cId].insert(type, wNicks);
-    }
-    else if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId) && m_watchedNicks[sgId][cId].contains(type))
-    {
-        m_watchedNicks[sgId][cId][type].insert(nick->getLoweredNickname(), nick);
+        m_watchedNicks[sgId][cId].insert(nick->getLoweredNickname(), nick);
     }
 
-    //TODO figure out a way to have the initial notify nicks added to monitor or watch
-    // in the same message, rather than n times.
-    if (type == 0)
-        server->queue("MONITOR + " + nick->getNickname(), Server::LowPriority);
-    else if (type == 1)
-        server->queue("WATCH +" + nick->getNickname(), Server::LowPriority);
-    else if (!m_timer->isActive())
+    if (type == 2)
+        m_activelyWatchedNicks[cId][type].append(nick->getNickname());
+    else
     {
-        m_timer->start(1000);
+        QString addNick = "+" + nick->getNickname();
+
+        m_activelyWatchedNicks[cId][type].append(addNick);
+    }
+
+    m_notifyChanged[cId] = true;
+
+    if (!m_notifyTimer->isActive())
+    {
+        m_notifyTimer->start(1000);
     }
 }
 
@@ -643,117 +749,287 @@ void NicksOnlineFilterModel::removeNotifyNick(int sgId, int cId, const QString& 
 {
     if (m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId))
     {
-        Server* server = m_connectionManager->getServerByConnectionId(cId);
-
         QString lcNick = nick.toLower();
 
-        if (m_watchedNicks[sgId][cId].contains(0) && m_watchedNicks[sgId][cId][0].contains(lcNick))
+        if (m_watchedNicks[sgId][cId].contains(lcNick))
         {
-            m_watchedNicks[sgId][cId][0].remove(lcNick);
-            server->queue("MONITOR + " + nick, Server::LowPriority);
-        }
-        if (m_watchedNicks[sgId][cId].contains(1) && m_watchedNicks[sgId][cId][1].contains(lcNick))
-        {
-            m_watchedNicks[sgId][cId][1].remove(lcNick);
-            server->queue("WATCH -" + nick, Server::LowPriority);
-        }
-        if (m_watchedNicks[sgId][cId].contains(2) && m_watchedNicks[sgId][cId][2].contains(lcNick))
-        {
-            m_watchedNicks[sgId][cId][2].remove(lcNick);
-            // no need to send a removal command
-        }
+            m_watchedNicks[sgId][cId].remove(lcNick);
 
-        // If there aren't any ISON's left turn off the timer
-
-        if (!isWatchTypeEmpty(2))
-            m_timer->stop();
+            removeActivelyWatchedNick(cId, nick);
+        }
     }
 }
 
-bool NicksOnlineFilterModel::isWatchTypeEmpty(int type) const
+void NicksOnlineFilterModel::removeActivelyWatchedNick(int cId, const QString& nick)
 {
-    WatchedNickListHash::const_iterator i;
-
-    for (i = m_watchedNicks.constBegin(); i != m_watchedNicks.constEnd(); ++i)
+    if (isNickActivelyWatched(cId, nick))
     {
-        WatchedNickConnections::const_iterator j;
+        QString addNick = "+" + nick;
+        QString delNick = "-" + nick;
 
-        for (j = i.value().constBegin(); j != i.value().constEnd(); ++j)
+        if (m_activelyWatchedNicks[cId][0].contains(nick) || m_activelyWatchedNicks[cId][0].contains(delNick))
         {
-            if (j.value().contains(type))
-            {
-                return true;
-            }
+            m_activelyWatchedNicks[cId][0].removeAll(nick);
+            m_activelyWatchedNicks[cId][0].removeAll(addNick);
+            m_activelyWatchedNicks[cId][0].append(delNick);
+            m_notifyChanged[cId] = true;
         }
-    }
 
-    return false;
+        if (m_activelyWatchedNicks[cId][1].contains(nick) || m_activelyWatchedNicks[cId][1].contains(delNick))
+        {
+            m_activelyWatchedNicks[cId][1].removeAll(nick);
+            m_activelyWatchedNicks[cId][1].removeAll(addNick);
+            m_activelyWatchedNicks[cId][1].append(delNick);
+            m_notifyChanged[cId] = true;
+        }
+
+        if (m_activelyWatchedNicks[cId][2].contains(nick))
+        {
+            m_activelyWatchedNicks[cId][2].removeAll(nick);
+
+            // If we are watching the nick with ISON, don't put them online/offline
+            // just because we removed it from our watching list
+            if (m_isonList[cId].contains(nick))
+                m_isonList[cId].removeAll(nick);
+        }
+
+        if (m_notifyChanged[cId] && !m_notifyTimer->isActive())
+            m_notifyTimer->start(1000);
+    }
 }
 
-void NicksOnlineFilterModel::isonCheck()
+void NicksOnlineFilterModel::notifyCheck()
 {
-    //run by a timer
+    //   cId,       type, nick
+    QHash<int, QHash<int, QStringList> >::iterator i;
 
-    //iterate over all server groups and send out messages on connections
-
-    QStringList isonList = QStringList();
-
-    WatchedNickListHash::const_iterator i;
-
-    for (i = m_watchedNicks.constBegin(); i != m_watchedNicks.constEnd(); ++i)
+    if (!m_activelyWatchedNicks.isEmpty())
     {
-        WatchedNickConnections::const_iterator j;
-
-        for (j = i.value().constBegin(); j != i.value().constEnd(); ++j)
+        for (i = m_activelyWatchedNicks.begin(); i != m_activelyWatchedNicks.end(); ++i)
         {
-            if (j.value().contains(2) && j.value()[2].count() > 0)
+            QHash<int, QString>::const_iterator j;
+
+            if (m_notifyChanged[i.key()])
             {
-                QStringList isonList = QStringList();
-
-                WatchedNicks::const_iterator k;
-
-                for (k = j.value()[2].constBegin(); k != j.value()[2].constEnd(); ++k)
+                if (i.value().contains(0) && !i.value()[0].isEmpty())
                 {
-                    isonList.append(k.value()->getNickname());
+                    requestMonitor(i.key(), i.value()[0]);
+                    i.value()[0].clear();
                 }
 
-                if (!isonList.isEmpty())
+                if (i.value().contains(1) && !i.value()[1].isEmpty())
                 {
-                    Server* server = m_connectionManager->getServerByConnectionId(j.key());
-                    // message must be less than 512 bytes, 'ISON <list><cr><lf>' leaving 505 for nicks and their separation
-                    QStringList messages = QStringList();
+                    requestWatch(i.key(), i.value()[1]);
+                    i.value()[1].clear();
+                }
 
-                    if (isonList.join(" ").length() > 505)
+                m_notifyChanged[i.key()] = false;
+            }
+
+            if (i.value().contains(2) && !i.value()[2].isEmpty())
+                requestIson(i.key(), i.value()[2]);
+        }
+    }
+}
+
+// have server delete watch types when connection is lost
+
+void NicksOnlineFilterModel::requestMonitor(int cId, const QStringList& nicks)
+{
+    if (!nicks.isEmpty())
+    {
+        Server* server = m_connectionManager->getServerByConnectionId(cId);
+
+        QStringList addNicks = QStringList();
+        QStringList delNicks = QStringList();
+
+        QStringList::const_iterator i;
+
+        for (i = nicks.constBegin(); i != nicks.constEnd(); ++i)
+        {
+            if ((*i).startsWith('+'))
+            {
+                server->getInputFilter()->setAutomaticRequest("MONITOR +", (*i).mid(1), true);
+                addNicks.append((*i).mid(1));
+            }
+            else if ((*i).startsWith('-'))
+            {
+                server->getInputFilter()->setAutomaticRequest("MONITOR -", (*i).mid(1), true);
+                delNicks.append((*i).mid(1));
+            }
+        }
+
+        QString mod = "+";
+        QStringList modNicks = addNicks;
+        QStringList messages = QStringList();
+
+        for (int j = 0; j < 2; j++)
+        {
+            if (j == 1)
+            {
+                mod = "-";
+                modNicks = delNicks;
+            }
+
+            if (modNicks.isEmpty())
+                continue;
+
+            // message must be less than 512 bytes, 'MONITOR + <list><cr><lf>' leaving 500 for nicks and their separation
+            if (modNicks.join(",").length() > 500)
+            {
+                QString message = QString();
+
+                for (i = modNicks.constBegin(); i != modNicks.constEnd(); ++i)
+                {
+                    if (message.isEmpty())
+                        message = "MONITOR " + mod + " " + (*i);
+                    // current length, + nick, + comma(1), + end(2)
+                    else if ((message.length() + (*i).length() + 3) > 500)
                     {
-                        QString message = QString();
+                        messages.append(message);
 
-                        QStringList::const_iterator m;
-                        for (m = isonList.constBegin(); m != isonList.constEnd(); ++m)
-                        {
-                            // current length, + nick, + space(1), + end(2)
-                            if (message.isEmpty())
-                                message = "ISON " + (*m);
-
-                            if (message.isEmpty() || (message.length() + (*m).length() + 3) > 505)
-                            {
-                                messages.append(message);
-
-                                message = "ISON " + (*m);
-                            }
-                            else
-                                message += " " + (*m);
-                        }
-
-                        if (!message.isEmpty())
-                            messages.append(message);
+                        message = "MONITOR " + mod + " " + (*i);
                     }
                     else
-                        messages.append("ISON " + isonList.join(" "));
+                        message += "," + (*i);
 
-                    server->queueList(messages, Server::LowPriority);
+                    m_activelyWatchedNicks[cId][0].removeAll(mod + (*i));
+
+                    if (mod == "+")
+                        m_activelyWatchedNicks[cId][0].append((*i));
+
+                }
+
+                if (!message.isEmpty())
+                    messages.append(message);
+            }
+            else
+            {
+                messages.append("MONITOR " + mod + " " + modNicks.join(","));
+
+                for (i = modNicks.constBegin(); i != modNicks.constEnd(); ++i)
+                {
+                    m_activelyWatchedNicks[cId][0].removeAll(mod + (*i));
+
+                    if (mod == "+")
+                        m_activelyWatchedNicks[cId][0].append((*i));
                 }
             }
         }
+
+        if (!messages.isEmpty())
+            server->queueList(messages, Server::LowPriority);
+    }
+
+
+}
+
+void NicksOnlineFilterModel::requestWatch(int cId, const QStringList& nicks)
+{
+    if (!nicks.isEmpty())
+    {
+        Server* server = m_connectionManager->getServerByConnectionId(cId);
+
+        QStringList modNicks = QStringList();
+        QStringList::const_iterator i;
+
+        for (i = nicks.constBegin(); i != nicks.constBegin(); ++i)
+        {
+            if ((*i).startsWith('+'))
+            {
+                server->getInputFilter()->setAutomaticRequest("WATCH +", (*i).mid(1), true);
+                modNicks.append(*i);
+            }
+            else if ((*i).startsWith('-'))
+            {
+                server->getInputFilter()->setAutomaticRequest("WATCH -", (*i).mid(1), true);
+                modNicks.append(*i);
+            }
+        }
+
+        // message must be less than 512 bytes, 'WATCH +nick1[ -nick2]<cr><lf>' leaving 504 for nicks, their modifier, and their separation
+        QStringList messages = QStringList();
+
+        if (modNicks.join(" ").length() > 504)
+        {
+            QString message = QString();
+
+            for (i = modNicks.constBegin(); i != modNicks.constEnd(); ++i)
+            {
+                if (message.isEmpty())
+                    message = "WATCH " + (*i);
+                // current length, + nick, + space(1), + end(2)
+                else if ((message.length() + (*i).length() + 3) > 504)
+                {
+                    messages.append(message);
+
+                    message = "WATCH " + (*i);
+                }
+                else
+                    message += " " + (*i);
+
+                m_activelyWatchedNicks[cId][1].removeAll(*i);
+
+                if ((*i).startsWith('+'))
+                    m_activelyWatchedNicks[cId][1].append((*i).mid(1));
+            }
+
+            if (!message.isEmpty())
+                messages.append(message);
+        }
+        else
+        {
+            messages.append("WATCH " + modNicks.join(" "));
+
+            for (i = modNicks.constBegin(); i != modNicks.constEnd(); ++i)
+            {
+                m_activelyWatchedNicks[cId][1].removeAll(*i);
+
+                if ((*i).startsWith('+'))
+                    m_activelyWatchedNicks[cId][1].append((*i).mid(1));
+            }
+        }
+
+        server->queueList(messages, Server::LowPriority);
+    }
+}
+
+void NicksOnlineFilterModel::requestIson(int cId, const QStringList& nicks)
+{
+    if (!nicks.isEmpty())
+    {
+        Server* server = m_connectionManager->getServerByConnectionId(cId);
+        // message must be less than 512 bytes, 'ISON <list><cr><lf>' leaving 505 for nicks and their separation
+        QStringList messages = QStringList();
+
+        if (nicks.join(" ").length() > 505)
+        {
+            QString message = QString();
+
+            QStringList::const_iterator i;
+
+            for (i = nicks.constBegin(); i != nicks.constEnd(); ++i)
+            {
+                if (message.isEmpty())
+                    message = "ISON " + (*i);
+                // current length, + nick, + space(1), + end(2)
+                else if ((message.length() + (*i).length() + 3) > 505)
+                {
+                    messages.append(message);
+
+                    message = "ISON " + (*i);
+                }
+                else
+                    message += " " + (*i);
+            }
+
+            if (!message.isEmpty())
+                messages.append(message);
+        }
+        else
+            messages.append("ISON " + nicks.join(" "));
+
+        server->queueList(messages, Server::LowPriority);
     }
 }
 
@@ -763,35 +1039,109 @@ void NicksOnlineFilterModel::updateMinimumRowHeight()
     m_minimumRowHeight = images->getNickIcon(Images::Normal, false).height() + 2;
 }
 
+void NicksOnlineFilterModel::waitForISupport(int cId)
+{
+    if (m_iSupportTimerHash.contains(cId))
+        m_iSupportTimerHash[cId]->start(3000);
+    else
+    {
+        m_iSupportTimerHash[cId] = new QTimer();
+        m_iSupportTimerHash[cId]->setSingleShot(true);
+
+        connect(m_iSupportTimerHash[cId], SIGNAL(timeout()), this, SLOT(endOfISupport()));
+
+        m_iSupportTimerHash[cId]->start(3000);
+    }
+}
+
+void NicksOnlineFilterModel::endOfISupport(int cId, bool last)
+{
+    if (last)
+    {
+        if (cId < 0)
+        {
+            QHash<int, QTimer*>::iterator i = m_iSupportTimerHash.begin();
+
+            while (i != m_iSupportTimerHash.end())
+            {
+                if (i.value()->isActive())
+                    ++i;
+                else
+                {
+                    addServerNotifyNicks(i.key());
+                    i = m_iSupportTimerHash.erase(i);
+                }
+            }
+        }
+        else
+        {
+            addServerNotifyNicks(cId);
+
+            if(m_iSupportTimerHash.contains(cId))
+                m_iSupportTimerHash.remove(cId);
+        }
+    }
+    else
+    {
+        // We recieved one line of RPL_ISUPPORT, wait another second to see if any more lines come in.
+        if (m_iSupportTimerHash.contains(cId))
+            m_iSupportTimerHash[cId]->start(1000);
+    }
+}
+
+void NicksOnlineFilterModel::addServerNotifyNicks(int cId)
+{
+    Server* server = m_connectionManager->getServerByConnectionId(cId);
+
+    if (server && server->getServerGroup())
+    {
+        int sgId = server->getServerGroup()->id();
+        QStringList notifyList = server->getServerGroup()->notifyList();
+        QStringList::const_iterator i;
+
+        for (i = notifyList.constBegin(); i != notifyList.constEnd(); ++i)
+        {
+            if (!isNickWatched(sgId, cId, *i))
+            {
+                Nick2* nick = new Nick2(cId, *i);
+
+                connect(nick, SIGNAL(nickChanged(int,QString,QVector<int>,QVector<int>)), this, SLOT(slotNickChanged(int,QString,QVector<int>,QVector<int>)));
+
+                addNotifyNick(sgId, cId, nick);
+            }
+        }
+    }
+}
+
 void NicksOnlineFilterModel::updateNotifyConnection(int sgId, int cId)
 {
-    if (m_connectionManager->getConnectedServerGroups().contains(sgId) && !m_watchedNicks.contains(sgId))
+    if (m_connectionManager->getConnectedServerGroups().contains(sgId, cId) && (!m_watchedNicks.contains(sgId) || !m_watchedNicks[sgId].contains(cId)))
     {
         Server* server = m_connectionManager->getServerByConnectionId(cId);
 
         if (server && server->getServerGroup())
         {
-            QStringList notifyList = server->getServerGroup()->notifyList();
-            QStringList::const_iterator i;
+            if (server->getWatchTypeSupport().isEmpty())
+                waitForISupport(cId);
+            else
+                endOfISupport(cId, true);
 
-            for (i = notifyList.constBegin(); i != notifyList.constEnd(); ++i)
-            {
-                if (!isNickWatched(sgId, cId, *i))
-                {
-                    Nick2* nick = new Nick2(cId, *i);
-
-                    connect(nick, SIGNAL(nickChanged(int,QString,QVector<int>,QVector<int>)), this, SLOT(slotNickChanged(int,QString,QVector<int>,QVector<int>)));
-
-                    addNotifyNick(sgId, cId, nick);
-                }
-            }
+            connect(server->getInputFilter(), SIGNAL(isonResponse(int,int,QString)), this, SLOT(isonResponse(int,int,QString)));
+            connect(server->getInputFilter(), SIGNAL(watchedNicksOnline(int,int,QStringList)), this, SLOT(watchedNicksOnline(int,int,QStringList)));
+            connect(server->getInputFilter(), SIGNAL(watchedNicksOffline(int,int,QStringList)), this, SLOT(watchedNicksOffline(int,int,QStringList)));
+            connect(server->getInputFilter(), SIGNAL(watchedNicksList(int,int,int,QStringList)), this, SLOT(watchedNicksList(int,int,int,QStringList)));
+            connect(server->getInputFilter(), SIGNAL(endOfWatchedNicksList(int,int,int)), this, SLOT(endOfWatchedNicksList(int,int,int)));
+            connect(server->getInputFilter(), SIGNAL(endOfWatchedNicksList(int,int,int)), this, SLOT(watchedNicksListReceived(int,int,int)));
+            connect(server->getInputFilter(), SIGNAL(endOfWhois(int,QString)), this, SLOT(whoisReceived(int,QString)));
         }
-        else
-            m_watchedNicks[sgId].remove(cId);
     }
     else if (!m_connectionManager->getConnectedServerGroups().contains(sgId) && m_watchedNicks.contains(sgId))
     {
         m_watchedNicks.remove(sgId);
+    }
+    else if (!m_connectionManager->getConnectedServerGroups().contains(sgId, cId) && m_watchedNicks.contains(sgId) && m_watchedNicks[sgId].contains(cId))
+    {
+        m_watchedNicks.remove(cId);
     }
 }
 

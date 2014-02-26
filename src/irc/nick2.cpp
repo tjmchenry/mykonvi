@@ -367,11 +367,27 @@ void Nick2::updateTooltips(const QString& channel)
 {
     if (channel.isEmpty())
     {
-        ChannelHash::const_iterator i;
-        for (i = m_channelHash.constBegin(); i != m_channelHash.constEnd(); ++i)
+        if (isInAnyChannel())
         {
-            updateTooltips(i.key());
+            ChannelHash::const_iterator i;
+            for (i = m_channelHash.constBegin(); i != m_channelHash.constEnd(); ++i)
+            {
+                updateTooltips(i.key());
+            }
         }
+        else
+        {
+            QString strTooltip;
+            QTextStream tooltip( &strTooltip, QIODevice::WriteOnly );
+
+            tooltip << "<qt>";
+            tooltip << "<table cellspacing=\"5\" cellpadding=\"0\">";
+
+            tooltipTableData(tooltip);
+
+            m_queryTooltip = strTooltip + "</table></qt>";
+        }
+
     }
     else if (isInChannel(channel))
     {
@@ -695,6 +711,9 @@ QString Nick2::getBestPersonName() const
 void Nick2::setPrintedOnline(bool printed)
 {
     m_printedOnline = printed;
+
+    emit tooltipsChanged(QString());
+    emit nickChanged(getConnectionId(), getNickname(), QVector<int>(), QVector<int>());
 }
 
 bool Nick2::getPrintedOnline() const

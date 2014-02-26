@@ -355,7 +355,7 @@ void NickListModel::slotNickChanged(int connectionId, const QString& nick, QVect
 {
     Q_UNUSED(rolesChanged);
 
-    if (!columnsChanged.contains(0) && !columnsChanged.contains(1))
+    if (!columnsChanged.contains(0) && !columnsChanged.contains(1) && !columnsChanged.isEmpty())
         return;
 
     QString lcNick = nick.toLower();
@@ -371,12 +371,12 @@ void NickListModel::slotNickChanged(int connectionId, const QString& nick, QVect
         {
             startIndex = NickListModel::index(position, 0, m_servers[connectionId]);
 
-            if (!m_hostmask || !columnsChanged.contains(1))
+            if (!m_hostmask || (!columnsChanged.contains(1) && !columnsChanged.isEmpty()))
                 lastIndex = startIndex;
             else
                 lastIndex = startIndex.sibling(startIndex.row(), 1);
         }
-        else if (m_hostmask && columnsChanged.contains(1))
+        else if (m_hostmask && (columnsChanged.contains(1) || columnsChanged.isEmpty()))
         {
             startIndex = NickListModel::index(position, 1, m_servers[connectionId]);
             lastIndex = startIndex;

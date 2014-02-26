@@ -1149,7 +1149,7 @@ void NicksOnlineFilterModel::slotNickChanged(int cId, const QString& nick, QVect
 {
     Q_UNUSED(rolesChanged);
 
-    if (!columnsChanged.contains(2) && !columnsChanged.contains(3))
+    if (!columnsChanged.contains(2) && !columnsChanged.contains(3) && !columnsChanged.isEmpty())
         return;
 
     Server* server = m_connectionManager->getServerByConnectionId(cId);
@@ -1174,7 +1174,7 @@ void NicksOnlineFilterModel::slotNickChanged(int cId, const QString& nick, QVect
         QModelIndex firstIndex = mapFromSource(srcIndex);
         QModelIndex lastIndex;
 
-        if (columnsChanged.contains(2) && columnsChanged.contains(3))
+        if ((columnsChanged.contains(2) && columnsChanged.contains(3)) || columnsChanged.isEmpty())
             lastIndex = firstIndex.sibling(firstIndex.row(), 1);
         else if (!columnsChanged.contains(2))
             lastIndex = firstIndex;

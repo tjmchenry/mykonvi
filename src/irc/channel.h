@@ -111,16 +111,10 @@ class Channel : public ChatWindow
 
     public slots:
         void setNickname(const QString& newNickname);
-        void scheduleAutoWho(int msec = -1);
-        void setAutoUserhost(bool state);
         void rejoin();
 
     protected slots:
         void setCurrentTopic();
-        void autoUserhost();
-        void autoWho();
-        void updateAutoWho();
-        void fadeActivity();
         virtual void serverOnline(bool online);
 
 
@@ -130,7 +124,6 @@ class Channel : public ChatWindow
         void removeNick(const QString& nickname, const QString& hostmask, const QString &reason, bool quit);
         void kickNick(const QString& nickname, const QString &kicker, const QString &reason);
         void nickRenamed(const QString &oldNick, const QString& nickname);
-        void endOfNames();
 
         virtual void emitUpdateInfo();
 
@@ -252,7 +245,6 @@ class Channel : public ChatWindow
         /// Enable/disable the mode buttons depending on whether you are op or not.
         void refreshModeButtons();
 
-        void nicknameListViewTextChanged(int textChangedFlags);
     protected:
         void showEvent(QShowEvent* event);
         void syncSplitters();

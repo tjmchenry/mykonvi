@@ -254,18 +254,6 @@ Channel::Channel(QWidget* parent, const QString& _name) : ChatWindow(parent)
     if(nicknameCombobox->lineEdit())
         connect(nicknameCombobox->lineEdit(), SIGNAL (editingFinished()),this,SLOT(nicknameComboboxChanged()));
 
-
-    connect(&userhostTimer,SIGNAL (timeout()),this,SLOT (autoUserhost()));
-
-    m_whoTimer.setSingleShot(true);
-    connect(&m_whoTimer, SIGNAL(timeout()), this, SLOT(autoWho()));
-    connect(Application::instance(), SIGNAL(appearanceChanged()), this, SLOT(updateAutoWho()));
-
-    // every 5 minutes decrease everyone's activity by 1 unit
-    m_fadeActivityTimer.start(5*60*1000);
-
-    connect(&m_fadeActivityTimer, SIGNAL(timeout()), this, SLOT(fadeActivity()));
-
     updateAppearance();
 
 #ifdef HAVE_QCA2
@@ -290,11 +278,12 @@ void Channel::setServer(Server* server)
     if (!server->getKeyForRecipient(getName()).isEmpty())
         cipherLabel->show();
     topicLine->setServer(server);
+
     m_channelNickListModel = new ChannelNickListFilterModel(m_server->connectionId(), this);
     m_channelNickListModel->setDynamicSortFilter(true);
     m_channelNickListModel->setSourceModel(m_server->nickListModel2());
     m_nicknameListView2->setModel(m_channelNickListModel);
-    m_nicknameListView2->setRootIndex(m_channelNickListModel->mapFromSource(m_server->nickListModel2()->serverIndex(m_server->connectionId())));
+    m_nicknameListView2->setRootIndex(m_channelNickListModel->serverIndex());
 
     refreshModeButtons();
     nicknameCombobox->setModel(m_server->nickListModel());
@@ -1714,7 +1703,6 @@ void Channel::updateAppearance()
     showNicknameList(Preferences::self()->showNickList());
     showNicknameBox(Preferences::self()->showNicknameBox());
     showTopic(Preferences::self()->showTopic());
-    setAutoUserhost(Preferences::self()->autoUserhost());
 
     updateQuickButtons(Preferences::quickButtonList());
 
@@ -1738,16 +1726,6 @@ void Channel::changeNickname(const QString& newNickname)
 {
     if (!newNickname.isEmpty())
         m_server->queue("NICK "+newNickname);
-}
-
-void Channel::endOfNames()
-{
-    if (!m_initialNamesReceived)
-    {
-        m_initialNamesReceived = true;
-
-        scheduleAutoWho();
-    }
 }
 
 void Channel::childAdjustFocus()
@@ -1828,163 +1806,6 @@ void Channel::refreshModeButtons()
 
 }
 
-void Channel::nicknameListViewTextChanged(int textChangedFlags)
-{
-    m_nicknameListViewTextChanged |= textChangedFlags;
-}
-
-void Channel::autoUserhost()
-{
-    //TODO move to channelnickfiltermodel
-    /*
-    if(Preferences::self()->autoUserhost() && !Preferences::self()->autoWhoContinuousEnabled())
-    {
-        int limit = 5;
-
-        QString nickString;
-
-        foreach (Nick* nick, getNickList())
-        {
-            if(nick->getChannelNick()->getHostmask().isEmpty())
-            {
-                if(limit--) nickString = nickString + nick->getChannelNick()->getNickname() + ' ';
-                else break;
-            }
-        }
-
-        if(!nickString.isEmpty()) m_server->requestUserhost(nickString);
-    }
-
-    if(!nicknameList.isEmpty())
-    {
-        resizeNicknameListViewColumns();
-    }*/
-}
-
-void Channel::setAutoUserhost(bool state)
-{
-    Q_UNUSED(state);
-    /*
-    nicknameListView->setColumnHidden(Nick::HostmaskColumn, !state);
-    if (state)
-    {
-        nicknameListView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        // Cannot use QHeaderView::ResizeToContents here because it is slow
-        // and it gets triggered by setSortingEnabled(). Using timed resize
-        // instead, see Channel::autoUserhost() above.
-        nicknameListView->header()->setResizeMode(Nick::NicknameColumn, QHeaderView::Fixed);
-        nicknameListView->header()->setResizeMode(Nick::HostmaskColumn, QHeaderView::Fixed);
-        userhostTimer.start(10000);
-        m_nicknameListViewTextChanged |= 0xFF; // ResizeColumnsToContents
-        QTimer::singleShot(0, this, SLOT(autoUserhost())); // resize columns ASAP
-    }
-    else
-    {
-        nicknameListView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        nicknameListView->header()->setResizeMode(Nick::NicknameColumn, QHeaderView::Stretch);
-        userhostTimer.stop();
-    }*/
-}
-
-void Channel::scheduleAutoWho(int msec)
-{
-    // The first auto-who is scheduled by ENDOFNAMES in InputFilter, which means
-    // the first auto-who occurs one interval after it. This has two desirable
-    // consequences specifically related to the startup phase: auto-who dispatch
-    // doesn't occur at the same time for all channels that are auto-joined, and
-    // it gives some breathing room to process the NAMES replies for all channels
-    // first before getting started on WHO.
-    // Subsequent auto-whos are scheduled by ENDOFWHO in InputFilter. However,
-    // autoWho() might refuse to actually do the request if the number of nicks
-    // in the channel exceeds the threshold, and will instead schedule another
-    // attempt later. Thus scheduling an auto-who does not guarantee it will be
-    // performed.
-    // If this is called mid-interval (e.g. due to the ENDOFWHO from a manual WHO)
-    // it will reset the interval to avoid cutting it short.
-
-    if (m_whoTimer.isActive())
-        m_whoTimer.stop();
-
-    if (Preferences::self()->autoWhoContinuousEnabled())
-    {
-        if (msec > 0)
-            m_whoTimer.start(msec);
-        else
-            m_whoTimer.start(Preferences::self()->autoWhoContinuousInterval() * 1000);
-    }
-}
-
-void Channel::autoWho()
-{
-    // Try again later if there are too many nicks or we're already processing a WHO request.
-    if ((nicks > Preferences::self()->autoWhoNicksLimit()) ||
-       m_server->getInputFilter()->isWhoRequestUnderProcess(getName()))
-    {
-        scheduleAutoWho();
-
-        return;
-    }
-
-    m_server->requestWho(getName());
-}
-
-void Channel::updateAutoWho()
-{
-    if (!Preferences::self()->autoWhoContinuousEnabled())
-        m_whoTimer.stop();
-    else if (Preferences::self()->autoWhoContinuousEnabled() && !m_whoTimer.isActive())
-        autoWho();
-    else if (m_whoTimer.isActive())
-    {
-        // The below tries to meet user expectations on an interval settings change,
-        // making two assumptions:
-        // - If the new interval is lower than the old one, the user may be impatient
-        //   and desires an information update.
-        // - If the new interval is longer than the old one, the user may be trying to
-        //   avoid Konversation producing too much traffic in a given timeframe, and
-        //   wants it to stop doing so sooner rather than later.
-        // Both require rescheduling the next auto-who request.
-
-        int interval = Preferences::self()->autoWhoContinuousInterval() * 1000;
-
-        if (interval != m_whoTimer.interval())
-        {
-            if (m_whoTimerStarted.elapsed() >= interval)
-            {
-                // If the time since the last auto-who request is longer than (or
-                // equal to) the new interval setting, it follows that the new
-                // setting is lower than the old setting. In this case issue a new
-                // request immediately, which is the closest we can come to acting
-                // as if the new setting had been active all along, short of tra-
-                // velling back in time to change history. This handles the impa-
-                // tient user.
-                // FIXME: Adjust algorithm when time machine becomes available.
-
-                m_whoTimer.stop();
-                autoWho();
-            }
-            else
-            {
-                // If on the other hand the elapsed time is shorter than the new
-                // interval setting, the new setting could be either shorter or
-                // _longer_ than the old setting. Happily, this time we can actually
-                // behave as if the new setting had been active all along, by sched-
-                // uling the next request to happen in the new interval time minus
-                // the already elapsed time, meeting user expecations for both cases
-                // originally laid out.
-
-                scheduleAutoWho(interval - m_whoTimerStarted.elapsed());
-            }
-        }
-    }
-}
-
-void Channel::fadeActivity()
-{
-    if (m_channelNickListModel)
-        m_channelNickListModel->setAllNicksLessActive();
-}
-
 bool Channel::canBeFrontView()
 {
     return true;
@@ -2031,7 +1852,18 @@ void Channel::serverOnline(bool online)
 void Channel::setActive(bool active)
 {
     if (active)
+    {
         nicknameCombobox->setEnabled(true);
+
+        if (!m_channelNickListModel)
+        {
+            m_channelNickListModel = new ChannelNickListFilterModel(m_server->connectionId(), this);
+            m_channelNickListModel->setDynamicSortFilter(true);
+            m_channelNickListModel->setSourceModel(m_server->nickListModel2());
+            m_nicknameListView2->setModel(m_channelNickListModel);
+            m_nicknameListView2->setRootIndex(m_channelNickListModel->serverIndex());
+        }
+    }
     else
     {
         m_initialNamesReceived = false;
@@ -2040,7 +1872,9 @@ void Channel::setActive(bool active)
         topicLine->clear();
         clearModeList();
         clearBanList();
-        m_whoTimer.stop();
+
+        delete m_channelNickListModel;
+        m_channelNickListModel = 0;
     }
 }
 

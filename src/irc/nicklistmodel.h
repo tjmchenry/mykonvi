@@ -121,8 +121,6 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
 
         Nick2* getNick(const QString& nick);
 
-        void setAllNicksLessActive();
-
         NickListModel* sourceNickModel() const;
 
         bool nickTimestampLessThan(const QModelIndex& left, const QModelIndex& right) const;
@@ -135,6 +133,10 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
         void nickCompletion(IRCInput* inputBar);
         void endNickCompletion();
 
+        void setAllNicksLessActive();
+        void updateAutoWho();
+        void setAutoUserHost();
+
     protected:
         QVariant getProperty(const QModelIndex& sourceIndex, const QString& property) const;
         bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const;
@@ -142,11 +144,24 @@ class ChannelNickListFilterModel : public QSortFilterProxyModel
 
         QString completeNick(const QString& pattern, bool& complete, QStringList& found, bool skipNonAlfaNum, bool caseSensitive);
 
+    protected slots:
+        void insertNicksFromNames(int connectionId, const QString& channel, const QStringList& namesList);
+        void endOfNames(const QString& channel = QString());
+        void scheduleAutoWho(const QString& channel = QString(), int msec = -1);
+        void autoWho();
+        void autoUserHost();
+
     private:
         Channel* m_channel;
         QString m_channelName;
         int m_connectionId;
         int m_completionPosition;
+
+        QTimer* m_fadeActivityTimer;
+        QTimer* m_whoTimer;
+        QTime* m_whoTimerStarted;
+        QTimer* m_userHostTimer;
+        bool m_initialNamesReceived;
 };
 
 #endif

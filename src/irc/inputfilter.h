@@ -84,7 +84,10 @@ class InputFilter : public QObject
         void topicAuthor(const QString& channel, const QString& author, QDateTime t);
         void endOfWho(const QString& target);
         void endOfWhois(int cId, const QString& nick);
+
+        void namesReply(int cId, const QString& channel, const QStringList& nickList);
         void endOfNames(const QString& target);
+
         void addChannelListPanel();
         void addToChannelList(const QString& channel,int users,const QString& topic);
         void endOfChannelList();

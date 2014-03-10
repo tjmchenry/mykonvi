@@ -73,7 +73,6 @@ void NickListModel::clear()
 
 void NickListModel::addServer(int connectionId)
 {
-
     m_servers[connectionId] = QPersistentModelIndex();
     m_nickHashes.insert(connectionId, NickHash());
     m_nickLists.insert(connectionId, QList<Nick2*>());
@@ -626,6 +625,29 @@ ChannelNickListFilterModel::ChannelNickListFilterModel(int connectionId, Channel
     {
         m_channel = channel;
         m_channelName = m_channel->getName();
+
+        m_whoTimer = new QTimer();
+        m_whoTimer->setSingleShot(true);
+        m_whoTimerStarted = new QTime();
+        m_userHostTimer = new QTimer();
+        m_fadeActivityTimer = new QTimer();
+
+        setAutoUserHost();
+
+        // every 5 minutes decrease everyone's activity by 1 unit
+        m_fadeActivityTimer->start(5*60*1000);
+
+        connect(m_fadeActivityTimer, SIGNAL(timeout()), this, SLOT(setAllNicksLessActive()));
+        connect(m_userHostTimer, SIGNAL(timeout()), this, SLOT(autoUserHost()));
+
+        connect(m_whoTimer, SIGNAL(timeout()), this, SLOT(autoWho()));
+        connect(Application::instance(), SIGNAL(appearanceChanged()), this, SLOT(updateAutoWho()));
+        connect(Application::instance(), SIGNAL(appearanceChanged()), this, SLOT(setAutoUserHost()));
+        connect(m_channel->getServer()->getInputFilter(), SIGNAL(endOfWho(QString)), this, SLOT(scheduleAutoWho(QString)));
+
+
+        connect(m_channel->getServer()->getInputFilter(), SIGNAL(namesReply(int,QString,QStringList)), this, SLOT(insertNicksFromNames(int,QString,QStringList)));
+        connect(m_channel->getServer()->getInputFilter(), SIGNAL(endOfNames(QString)), this, SLOT(endOfNames(QString)));
     }
     else
     {
@@ -635,6 +657,9 @@ ChannelNickListFilterModel::ChannelNickListFilterModel(int connectionId, Channel
     }
 
     m_connectionId = connectionId;
+
+    m_initialNamesReceived = false;
+
 
     QSortFilterProxyModel::setDynamicSortFilter(true);
     QSortFilterProxyModel::sort(0, Qt::AscendingOrder);
@@ -651,6 +676,14 @@ void ChannelNickListFilterModel::insertNick(Nick2* item)
         sourceNickModel()->insertNick(m_connectionId, item);
 
         sourceNickModel()->addNickToChannel(m_connectionId, m_channelName, item->getNickname());
+    }
+}
+
+void ChannelNickListFilterModel::insertNicksFromNames(int cId, const QString& channel, const QStringList& nickList)
+{
+    if (sourceNickModel())
+    {
+        sourceNickModel()->insertNicksFromNames(cId, channel, nickList);
     }
 }
 
@@ -741,6 +774,244 @@ Nick2* ChannelNickListFilterModel::getNick(const QString& nick)
         return sourceNickModel()->getNick(m_connectionId, nick);
 
     return NULL;
+}
+
+bool ChannelNickListFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
+{
+    if (sourceNickModel())
+    {
+        QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
+
+        if (index.isValid())
+        {
+            if (index.internalId() < 0 && sourceNickModel()->getConnectionIdFromRow(index.row()) == m_connectionId && sourceModel()->hasChildren(sourceParent))
+                return true;
+            if (index.internalId() == m_connectionId)
+                return index.data(NickListModel::ChannelsRole).toStringList().contains(m_channelName);
+        }
+    }
+
+    return false;
+}
+
+bool ChannelNickListFilterModel::lessThan(const QModelIndex& sourceLeft, const QModelIndex& sourceRight) const
+{
+    if (!sourceLeft.isValid() || !sourceRight.isValid())
+        return false;
+
+    if(Preferences::self()->sortByActivity())
+    {
+        return nickActivityLessThan(sourceLeft, sourceRight);
+    }
+    else if(Preferences::self()->sortByStatus())
+    {
+        return nickStatusLessThan(sourceLeft, sourceRight);
+    }
+    else
+    {
+        return nickLessThan(sourceLeft, sourceRight);
+    }
+}
+
+bool ChannelNickListFilterModel::nickTimestampLessThan(const QModelIndex& left, const QModelIndex& right) const
+{
+    int difference = getProperty(left, "timestamp").toUInt() - getProperty(right, "timestamp").toUInt();
+
+    if (difference != 0)
+        return (difference < 0) ? false : true;
+
+    if (Preferences::self()->sortByStatus())
+        return nickStatusLessThan(left, right);
+
+    return nickLessThan(left, right);
+}
+
+bool ChannelNickListFilterModel::nickLessThan(const QModelIndex& left, const QModelIndex& right) const
+{
+    if (Preferences::self()->sortCaseInsensitive())
+    {
+        if (left.data(NickListModel::LoweredNickRole).toString() != right.data(NickListModel::LoweredNickRole).toString())
+            return left.data(NickListModel::LoweredNickRole).toString() < right.data(NickListModel::LoweredNickRole).toString();
+
+        return nickHostmaskLessThan(left, right);
+    }
+    else
+    {
+        if (left.data(NickListModel::NickRole).toString() != right.data(NickListModel::NickRole).toString())
+            return left.data(NickListModel::NickRole).toString() < right.data(NickListModel::NickRole).toString();
+
+        return nickHostmaskLessThan(left, right);
+    }
+}
+
+bool ChannelNickListFilterModel::nickHostmaskLessThan(const QModelIndex& left, const QModelIndex& right) const
+{
+    if (Preferences::self()->sortCaseInsensitive())
+    {
+        return left.data(NickListModel::LoweredHostmaskRole).toString() < right.data(NickListModel::LoweredHostmaskRole).toString();
+    }
+
+    return left.data(NickListModel::HostmaskRole).toString() < right.data(NickListModel::HostmaskRole).toString();
+}
+
+bool ChannelNickListFilterModel::nickActivityLessThan(const QModelIndex& left, const QModelIndex& right) const
+{
+    int difference = getProperty(left, "activity").toUInt() - getProperty(right, "activity").toUInt();
+
+    if (difference != 0)
+        return (difference < 0) ? false : true;
+
+    return nickTimestampLessThan(left, right);
+}
+
+bool ChannelNickListFilterModel::nickStatusLessThan(const QModelIndex& left, const QModelIndex& right) const
+{
+    int difference = getProperty(left, "statusValue").toInt() - getProperty(right, "statusValue").toInt();
+
+    if (difference != 0)
+        return (difference > 0) ? false : true;
+
+    return nickLessThan(left, right);
+}
+
+void ChannelNickListFilterModel::autoUserHost()
+{
+    if(Preferences::self()->autoUserhost() && !Preferences::self()->autoWhoContinuousEnabled())
+    {
+        int limit = 5;
+
+        QModelIndexList indexList = match(index(0, 0, serverIndex()), NickListModel::HostmaskRole, QString(), limit, Qt::MatchFlags(Qt::MatchExactly | Qt::MatchWrap));
+
+        QString nickString;
+
+        foreach (const QModelIndex& index, indexList)
+        {
+            nickString += index.data(NickListModel::NickRole).toString();
+        }
+
+        if(!nickString.isEmpty()) m_channel->getServer()->requestUserhost(nickString);
+    }
+}
+
+void ChannelNickListFilterModel::setAutoUserHost()
+{
+    if (Preferences::self()->autoUserhost())
+    {
+        QTimer::singleShot(0, this, SLOT(autoUserHost()));
+    }
+    else
+    {
+        m_userHostTimer->stop();
+    }
+}
+
+void ChannelNickListFilterModel::scheduleAutoWho(const QString& channel, int msec)
+{
+    if (!channel.isEmpty() && m_channelName != channel)
+        return;
+
+    // The first auto-who is scheduled by ENDOFNAMES in InputFilter, which means
+    // the first auto-who occurs one interval after it. This has two desirable
+    // consequences specifically related to the startup phase: auto-who dispatch
+    // doesn't occur at the same time for all channels that are auto-joined, and
+    // it gives some breathing room to process the NAMES replies for all channels
+    // first before getting started on WHO.
+    // Subsequent auto-whos are scheduled by ENDOFWHO in InputFilter. However,
+    // autoWho() might refuse to actually do the request if the number of nicks
+    // in the channel exceeds the threshold, and will instead schedule another
+    // attempt later. Thus scheduling an auto-who does not guarantee it will be
+    // performed.
+    // If this is called mid-interval (e.g. due to the ENDOFWHO from a manual WHO)
+    // it will reset the interval to avoid cutting it short.
+
+    if (m_whoTimer->isActive())
+        m_whoTimer->stop();
+
+    if (Preferences::self()->autoWhoContinuousEnabled())
+    {
+        if (msec > 0)
+            m_whoTimer->start(msec);
+        else
+            m_whoTimer->start(Preferences::self()->autoWhoContinuousInterval() * 1000);
+    }
+}
+
+void ChannelNickListFilterModel::autoWho()
+{
+    // Try again later if there are too many nicks or we're already processing a WHO request.
+    if ((rowCount(serverIndex()) > Preferences::self()->autoWhoNicksLimit()) ||
+       m_channel->getServer()->getInputFilter()->isWhoRequestUnderProcess(m_channelName))
+    {
+        scheduleAutoWho();
+
+        return;
+    }
+
+    m_whoTimerStarted->start();
+    m_channel->getServer()->requestWho(m_channelName);
+}
+
+void ChannelNickListFilterModel::updateAutoWho()
+{
+    if (!Preferences::self()->autoWhoContinuousEnabled())
+        m_whoTimer->stop();
+    else if (Preferences::self()->autoWhoContinuousEnabled() && !m_whoTimer->isActive())
+        autoWho();
+    else if (m_whoTimer->isActive())
+    {
+        // The below tries to meet user expectations on an interval settings change,
+        // making two assumptions:
+        // - If the new interval is lower than the old one, the user may be impatient
+        //   and desires an information update.
+        // - If the new interval is longer than the old one, the user may be trying to
+        //   avoid Konversation producing too much traffic in a given timeframe, and
+        //   wants it to stop doing so sooner rather than later.
+        // Both require rescheduling the next auto-who request.
+
+        int interval = Preferences::self()->autoWhoContinuousInterval() * 1000;
+
+        if (interval != m_whoTimer->interval())
+        {
+            if (m_whoTimerStarted->elapsed() >= interval)
+            {
+                // If the time since the last auto-who request is longer than (or
+                // equal to) the new interval setting, it follows that the new
+                // setting is lower than the old setting. In this case issue a new
+                // request immediately, which is the closest we can come to acting
+                // as if the new setting had been active all along, short of tra-
+                // velling back in time to change history. This handles the impa-
+                // tient user.
+
+                m_whoTimer->stop();
+                autoWho();
+            }
+            else
+            {
+                // If on the other hand the elapsed time is shorter than the new
+                // interval setting, the new setting could be either shorter or
+                // _longer_ than the old setting. Happily, this time we can actually
+                // behave as if the new setting had been active all along, by sched-
+                // uling the next request to happen in the new interval time minus
+                // the already elapsed time, meeting user expecations for both cases
+                // originally laid out.
+
+                scheduleAutoWho(QString(), interval - m_whoTimerStarted->elapsed());
+            }
+        }
+    }
+}
+
+void ChannelNickListFilterModel::endOfNames(const QString& channel)
+{
+    if (!channel.isEmpty() && m_channelName != channel)
+        return;
+
+    if (!m_initialNamesReceived)
+    {
+        m_initialNamesReceived = true;
+
+        scheduleAutoWho();
+    }
 }
 
 void ChannelNickListFilterModel::nickCompletion(IRCInput* inputBar)
@@ -991,104 +1262,6 @@ void ChannelNickListFilterModel::endNickCompletion()
         m_completionPosition--;
     else
         m_completionPosition = rowCount(serverIndex()) - 1;
-}
-
-bool ChannelNickListFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
-{
-    if (sourceNickModel())
-    {
-        QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
-
-        if (index.isValid())
-        {
-            if (index.internalId() < 0 && sourceNickModel()->getConnectionIdFromRow(index.row()) == m_connectionId && sourceModel()->hasChildren(sourceParent))
-                return true;
-            if (index.internalId() == m_connectionId)
-                return index.data(NickListModel::ChannelsRole).toStringList().contains(m_channelName);
-        }
-    }
-
-    return false;
-}
-
-bool ChannelNickListFilterModel::lessThan(const QModelIndex& sourceLeft, const QModelIndex& sourceRight) const
-{
-    if (!sourceLeft.isValid() || !sourceRight.isValid())
-        return false;
-
-    if(Preferences::self()->sortByActivity())
-    {
-        return nickActivityLessThan(sourceLeft, sourceRight);
-    }
-    else if(Preferences::self()->sortByStatus())
-    {
-        return nickStatusLessThan(sourceLeft, sourceRight);
-    }
-    else
-    {
-        return nickLessThan(sourceLeft, sourceRight);
-    }
-}
-
-bool ChannelNickListFilterModel::nickTimestampLessThan(const QModelIndex& left, const QModelIndex& right) const
-{
-    int difference = getProperty(left, "timestamp").toUInt() - getProperty(right, "timestamp").toUInt();
-
-    if (difference != 0)
-        return (difference < 0) ? false : true;
-
-    if (Preferences::self()->sortByStatus())
-        return nickStatusLessThan(left, right);
-
-    return nickLessThan(left, right);
-}
-
-bool ChannelNickListFilterModel::nickLessThan(const QModelIndex& left, const QModelIndex& right) const
-{
-    if (Preferences::self()->sortCaseInsensitive())
-    {
-        if (left.data(NickListModel::LoweredNickRole).toString() != right.data(NickListModel::LoweredNickRole).toString())
-            return left.data(NickListModel::LoweredNickRole).toString() < right.data(NickListModel::LoweredNickRole).toString();
-
-        return nickHostmaskLessThan(left, right);
-    }
-    else
-    {
-        if (left.data(NickListModel::NickRole).toString() != right.data(NickListModel::NickRole).toString())
-            return left.data(NickListModel::NickRole).toString() < right.data(NickListModel::NickRole).toString();
-
-        return nickHostmaskLessThan(left, right);
-    }
-}
-
-bool ChannelNickListFilterModel::nickHostmaskLessThan(const QModelIndex& left, const QModelIndex& right) const
-{
-    if (Preferences::self()->sortCaseInsensitive())
-    {
-        return left.data(NickListModel::LoweredHostmaskRole).toString() < right.data(NickListModel::LoweredHostmaskRole).toString();
-    }
-
-    return left.data(NickListModel::HostmaskRole).toString() < right.data(NickListModel::HostmaskRole).toString();
-}
-
-bool ChannelNickListFilterModel::nickActivityLessThan(const QModelIndex& left, const QModelIndex& right) const
-{
-    int difference = getProperty(left, "activity").toUInt() - getProperty(right, "activity").toUInt();
-
-    if (difference != 0)
-        return (difference < 0) ? false : true;
-
-    return nickTimestampLessThan(left, right);
-}
-
-bool ChannelNickListFilterModel::nickStatusLessThan(const QModelIndex& left, const QModelIndex& right) const
-{
-    int difference = getProperty(left, "statusValue").toInt() - getProperty(right, "statusValue").toInt();
-
-    if (difference != 0)
-        return (difference > 0) ? false : true;
-
-    return nickLessThan(left, right);
 }
 
 #include "nicklistmodel.moc"

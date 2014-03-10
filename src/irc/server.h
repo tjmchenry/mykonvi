@@ -460,8 +460,6 @@ class Server : public QObject
         void scriptExecutionError(const QString& name);
         void userhost(const QString& nick,const QString& hostmask,bool away,bool ircOp);
         void setTopicAuthor(const QString& channel,const QString& author, QDateTime t);
-        void endOfWho(const QString& target);
-        void endOfNames(const QString& target);
         void invitation(const QString& nick,const QString& channel);
         void gotOwnResolvedHostByWelcome(const QHostInfo& res);
         void gotOwnResolvedHostByUserhost(const QHostInfo& res);
